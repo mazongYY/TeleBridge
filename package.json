@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Telegram message forwarder running on Cloudflare Workers.",
   "scripts": {
-    "check": "node --check src/index.js && node --check scripts/userbot-config.mjs && node --check scripts/login-user.mjs && node --check scripts/user-forwarder.mjs && node --test",
+    "check": "node --check src/index.js && node --check scripts/userbot-config.mjs && node --check scripts/userbot-runtime.mjs && node --check scripts/login-user.mjs && node --check scripts/user-forwarder.mjs && node --test",
     "test": "node --test",
     "user:login": "node scripts/login-user.mjs",
     "user:forward": "node scripts/user-forwarder.mjs",

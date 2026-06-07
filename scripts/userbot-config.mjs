@@ -12,6 +12,12 @@ export function loadUserbotConfig(env = process.env) {
     silent: parseBoolean(env.USERBOT_SILENT, false),
     dropAuthor: parseBoolean(env.USERBOT_DROP_AUTHOR, false),
     noForwards: parseBoolean(env.USERBOT_PROTECT_CONTENT, false),
+    keepaliveEnabled: parseBoolean(env.USERBOT_KEEPALIVE_ENABLED, true),
+    keepaliveIntervalMinutes: parseInteger(env.USERBOT_KEEPALIVE_INTERVAL_MINUTES, 360),
+    keepaliveMessage: stringValue(env.USERBOT_KEEPALIVE_MESSAGE) || "Telegram 转发器保活",
+    dailyReportEnabled: parseBoolean(env.USERBOT_DAILY_REPORT_ENABLED, true),
+    dailyReportTime: stringValue(env.USERBOT_DAILY_REPORT_TIME) || "23:55",
+    dailyReportTimezoneOffset: stringValue(env.USERBOT_DAILY_REPORT_TIMEZONE_OFFSET) || "+08:00",
     reconnectDelayMs: parseInteger(env.USERBOT_RECONNECT_DELAY_MS, 5000),
     healthHost: stringValue(env.USERBOT_HEALTH_HOST) || "0.0.0.0",
     healthPort: parseInteger(env.PORT || env.USERBOT_HEALTH_PORT, 7860),
@@ -21,6 +27,13 @@ export function loadUserbotConfig(env = process.env) {
   if (config.reconnectDelayMs < 1000) {
     throw new Error("USERBOT_RECONNECT_DELAY_MS must be at least 1000");
   }
+
+  if (config.keepaliveIntervalMinutes < 1) {
+    throw new Error("USERBOT_KEEPALIVE_INTERVAL_MINUTES must be at least 1");
+  }
+
+  validateDailyReportTime(config.dailyReportTime);
+  validateTimezoneOffset(config.dailyReportTimezoneOffset);
 
   if (config.healthPort < 0 || config.healthPort > 65535) {
     throw new Error("PORT or USERBOT_HEALTH_PORT must be between 0 and 65535");
@@ -160,6 +173,25 @@ function parseBoolean(value, fallback) {
   }
 
   return ["1", "true", "yes", "y", "on"].includes(String(value).toLowerCase());
+}
+
+function validateDailyReportTime(value) {
+  if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(String(value || ""))) {
+    throw new Error("USERBOT_DAILY_REPORT_TIME must use HH:mm format");
+  }
+}
+
+function validateTimezoneOffset(value) {
+  const match = String(value || "").match(/^([+-])(\d{2}):(\d{2})$/);
+  if (!match) {
+    throw new Error("USERBOT_DAILY_REPORT_TIMEZONE_OFFSET must use +HH:mm or -HH:mm format");
+  }
+
+  const hours = Number.parseInt(match[2], 10);
+  const minutes = Number.parseInt(match[3], 10);
+  if (hours > 14 || minutes > 59) {
+    throw new Error("USERBOT_DAILY_REPORT_TIMEZONE_OFFSET is out of range");
+  }
 }
 
 function requiredString(value, name) {

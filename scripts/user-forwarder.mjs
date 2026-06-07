@@ -12,23 +12,29 @@ import {
   shouldForwardUserChatType,
   shouldForwardUserMessage
 } from "./userbot-config.mjs";
+import {
+  createRuntimeState,
+  formatDailyReport,
+  formatKeepaliveMessage,
+  getNextDailyReportDelayMs,
+  recordError,
+  recordForwarded,
+  recordSkipped,
+  resetDailyMetrics
+} from "./userbot-runtime.mjs";
 
-const config = loadUserbotConfig();
-
-if (!config.session) {
-  throw new Error("TELEGRAM_USER_SESSION is required. Run `npm run user:login` first.");
-}
-
-let stopping = false;
+let config;
 let queue = Promise.resolve();
-const state = {
-  startedAt: new Date().toISOString(),
-  connected: false,
-  authorized: false,
-  targetPeerId: "",
-  lastForwardedAt: "",
-  lastError: ""
-};
+let stopping = false;
+const state = createRuntimeState();
+
+try {
+  config = loadUserbotConfig();
+} catch (error) {
+  config = loadFallbackConfig();
+  state.lastError = formatError(error);
+  console.error("User forwarder config error:", state.lastError);
+}
 
 const healthServer = startHealthServer(config, state);
 
@@ -43,6 +49,11 @@ process.on("SIGTERM", () => {
 });
 
 while (!stopping) {
+  if (!isRunnableConfig(config)) {
+    await sleep(config.reconnectDelayMs);
+    continue;
+  }
+
   const client = new TelegramClient(
     new StringSession(config.session),
     config.apiId,
@@ -70,17 +81,25 @@ while (!stopping) {
     client.addEventHandler((event) => {
       queue = queue
         .then(() => handleNewMessage(client, event, targetEntity, targetPeerId, config))
-        .catch((error) => console.error("Forward queue error:", formatError(error)));
+        .catch((error) => {
+          const reason = formatError(error);
+          state.lastError = reason;
+          recordError(state, "forward_queue_error");
+          console.error("Forward queue error:", reason);
+        });
     }, new NewMessage({ incoming: config.includeOutgoing ? undefined : true }));
 
+    const stopSchedulers = startNotificationSchedulers(client, targetEntity, config, state);
     while (!stopping) {
       await sleep(1000);
     }
+    stopSchedulers();
   } catch (error) {
     state.connected = false;
     state.authorized = false;
     state.lastError = formatError(error);
-    console.error("User forwarder error:", formatError(error));
+    recordError(state, error?.errorMessage || error?.code || "connection_error");
+    console.error("User forwarder error:", state.lastError);
     if (!stopping) {
       console.log(`Reconnecting in ${config.reconnectDelayMs}ms...`);
       await sleep(config.reconnectDelayMs);
@@ -101,6 +120,7 @@ async function handleNewMessage(client, event, targetEntity, targetPeerId, runti
   const chatTypeDecision = shouldForwardUserChatType(chatType, runtimeConfig);
 
   if (!chatTypeDecision.ok) {
+    recordSkipped(state, chatTypeDecision.reason);
     logDebug(`Skipped message ${message.id}: ${chatTypeDecision.reason}`);
     return;
   }
@@ -108,6 +128,7 @@ async function handleNewMessage(client, event, targetEntity, targetPeerId, runti
   const decision = shouldForwardUserMessage(message, sourcePeerId, targetPeerId, runtimeConfig);
 
   if (!decision.ok) {
+    recordSkipped(state, decision.reason);
     logDebug(`Skipped message ${message.id}: ${decision.reason}`);
     return;
   }
@@ -121,11 +142,81 @@ async function handleNewMessage(client, event, targetEntity, targetPeerId, runti
       noforwards: runtimeConfig.noForwards
     });
 
-    state.lastForwardedAt = new Date().toISOString();
+    recordForwarded(state, chatType);
     console.log(`Forwarded message ${message.id} from ${normalizeId(sourcePeerId)} to ${targetPeerId}`);
   } catch (error) {
     state.lastError = formatError(error);
-    console.error(`Failed to forward message ${message.id} from ${normalizeId(sourcePeerId)}:`, formatError(error));
+    recordError(state, error?.errorMessage || error?.code || "forward_error");
+    console.error(`Failed to forward message ${message.id} from ${normalizeId(sourcePeerId)}:`, state.lastError);
+  }
+}
+
+function startNotificationSchedulers(client, targetEntity, runtimeConfig, runtimeState) {
+  const timers = [];
+
+  if (runtimeConfig.keepaliveEnabled) {
+    timers.push(setInterval(() => {
+      sendServiceMessage(
+        client,
+        targetEntity,
+        formatKeepaliveMessage(runtimeState, runtimeConfig),
+        "keepalive"
+      ).then((ok) => {
+        if (ok) {
+          runtimeState.lastKeepaliveAt = new Date().toISOString();
+        }
+      });
+    }, runtimeConfig.keepaliveIntervalMinutes * 60 * 1000));
+  }
+
+  if (runtimeConfig.dailyReportEnabled) {
+    scheduleNextDailyReport(client, targetEntity, runtimeConfig, runtimeState, timers);
+  }
+
+  return () => {
+    for (const timer of timers) {
+      clearTimeout(timer);
+      clearInterval(timer);
+    }
+  };
+}
+
+function scheduleNextDailyReport(client, targetEntity, runtimeConfig, runtimeState, timers) {
+  const delay = getNextDailyReportDelayMs(
+    runtimeConfig.dailyReportTime,
+    runtimeConfig.dailyReportTimezoneOffset
+  );
+  const timer = setTimeout(async () => {
+    const ok = await sendServiceMessage(
+      client,
+      targetEntity,
+      formatDailyReport(runtimeState, runtimeConfig),
+      "daily_report"
+    );
+    if (ok) {
+      runtimeState.lastDailyReportAt = new Date().toISOString();
+      resetDailyMetrics(runtimeState);
+    }
+    scheduleNextDailyReport(client, targetEntity, runtimeConfig, runtimeState, timers);
+  }, delay);
+
+  timers.push(timer);
+}
+
+async function sendServiceMessage(client, targetEntity, message, reason) {
+  try {
+    await client.sendMessage(targetEntity, {
+      message,
+      silent: true,
+      noforwards: true
+    });
+    console.log(`Sent ${reason} message`);
+    return true;
+  } catch (error) {
+    state.lastError = formatError(error);
+    recordError(state, `${reason}_send_error`);
+    console.error(`Failed to send ${reason} message:`, state.lastError);
+    return false;
   }
 }
 
@@ -153,6 +244,42 @@ function startHealthServer(runtimeConfig, runtimeState) {
   });
 
   return server;
+}
+
+function isRunnableConfig(runtimeConfig) {
+  return Boolean(
+    runtimeConfig.apiId &&
+      runtimeConfig.apiHash &&
+      runtimeConfig.session &&
+      runtimeConfig.target
+  );
+}
+
+function loadFallbackConfig() {
+  return {
+    apiId: 0,
+    apiHash: "",
+    session: "",
+    target: "",
+    monitoredChatTypes: ["private", "group", "channel", "official"],
+    allowedSourceChats: [],
+    blockedSourceChats: [],
+    skipTargetChat: true,
+    includeOutgoing: true,
+    silent: false,
+    dropAuthor: false,
+    noForwards: false,
+    keepaliveEnabled: false,
+    keepaliveIntervalMinutes: 360,
+    keepaliveMessage: "Telegram 转发器保活",
+    dailyReportEnabled: false,
+    dailyReportTime: "23:55",
+    dailyReportTimezoneOffset: "+08:00",
+    reconnectDelayMs: 5000,
+    healthHost: String(process.env.USERBOT_HEALTH_HOST || "0.0.0.0"),
+    healthPort: Number.parseInt(String(process.env.PORT || process.env.USERBOT_HEALTH_PORT || "7860"), 10) || 7860,
+    logLevel: "info"
+  };
 }
 
 function logDebug(message) {
