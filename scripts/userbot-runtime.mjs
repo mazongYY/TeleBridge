@@ -79,15 +79,22 @@ export function resetDailyMetrics(state, now = new Date()) {
 }
 
 export function formatKeepaliveMessage(state, config, now = new Date()) {
-  const template = config.keepaliveMessage || "Telegram forwarder keepalive";
+  const template = config.keepaliveMessage || "📡 转发器保活提醒";
+  const timezoneOffset = config.dailyReportTimezoneOffset;
   return [
-    template,
-    `time: ${formatLocalDateTime(config.dailyReportTimezoneOffset, now)}`,
-    `connected: ${state.connected}`,
-    `authorized: ${state.authorized}`,
-    `target: ${state.targetPeerId || "unresolved"}`,
-    `forwarded_today: ${state.metrics.forwarded}`,
-    `errors_today: ${state.metrics.errors}`
+    formatKeepaliveTitle(template),
+    `🕒 当前时间：${formatLocalDateTime(timezoneOffset, now)}`,
+    "",
+    "✅ 运行状态",
+    `• 连接状态：${formatBooleanStatus(state.connected)}`,
+    `• 授权状态：${formatBooleanStatus(state.authorized)}`,
+    `• 目标会话：${state.targetPeerId || "未解析"}`,
+    "",
+    "📨 今日统计",
+    `• 已转发：${state.metrics.forwarded}`,
+    `• 错误数：${state.metrics.errors}`,
+    `• 最近转发：${formatTimestamp(state.lastForwardedAt, timezoneOffset)}`,
+    `• 最近错误：${formatLastErrorForNotification(state.lastError)}`
   ].join("\n");
 }
 
@@ -95,7 +102,7 @@ export function formatDailyReport(state, config, now = new Date()) {
   const metrics = state.metrics;
   const timezoneOffset = config.dailyReportTimezoneOffset;
   return [
-    "📊 TeleBridge 转发日报",
+    "📊 转发日报",
     `📅 日期：${formatLocalDate(timezoneOffset, now)}`,
     `🕒 统计开始：${formatTimestamp(metrics.windowStartedAt, timezoneOffset)}`,
     "",
@@ -116,7 +123,7 @@ export function formatDailyReport(state, config, now = new Date()) {
     `• 已跳过：${metrics.skipped}`,
     `• 错误数：${metrics.errors}`,
     `• 最近转发：${formatTimestamp(state.lastForwardedAt, timezoneOffset)}`,
-    `• 最近错误：${state.lastError || "无"}`,
+    `• 最近错误：${formatLastErrorForNotification(state.lastError)}`,
     "",
     "🧭 跳过原因",
     formatReasonMap(metrics.skipReasons, SKIP_REASON_LABELS),
@@ -226,11 +233,20 @@ function formatReasonLabel(reason, labels) {
 
   const chatTypeMatch = String(reason).match(/^chat_type_(.+)_not_monitored$/);
   if (chatTypeMatch) {
-    const chatType = CHAT_TYPE_LABELS[chatTypeMatch[1]] || chatTypeMatch[1];
+    const chatType = CHAT_TYPE_LABELS[chatTypeMatch[1]] || "未知类型";
     return `未监听${chatType}`;
   }
 
-  return String(reason);
+  return "未分类原因";
+}
+
+function formatLastErrorForNotification(value) {
+  return value ? "有错误，请查看运行日志" : "无";
+}
+
+function formatKeepaliveTitle(value) {
+  const title = String(value || "").trim() || "转发器保活提醒";
+  return title.startsWith("📡") ? title : `📡 ${title}`;
 }
 
 function pad2(value) {

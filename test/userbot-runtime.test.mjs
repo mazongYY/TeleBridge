@@ -47,11 +47,17 @@ test("formats keepalive and daily reports", () => {
   state.lastError = "飞书 Webhook 返回错误";
 
   const keepalive = formatKeepaliveMessage(state, config, new Date("2026-06-07T02:00:00.000Z"));
-  assert.match(keepalive, /保活测试/);
-  assert.match(keepalive, /forwarded_today: 1/);
+  assert.match(keepalive, /📡 保活测试/);
+  assert.match(keepalive, /🕒 当前时间：2026-06-07 10:00:00 \+08:00/);
+  assert.match(keepalive, /✅ 运行状态/);
+  assert.match(keepalive, /• 连接状态：正常/);
+  assert.match(keepalive, /• 授权状态：正常/);
+  assert.match(keepalive, /📨 今日统计/);
+  assert.match(keepalive, /• 已转发：1/);
+  assert.match(keepalive, /• 最近错误：有错误，请查看运行日志/);
 
   const report = formatDailyReport(state, config, new Date("2026-06-07T15:55:00.000Z"));
-  assert.match(report, /📊 TeleBridge 转发日报/);
+  assert.match(report, /📊 转发日报/);
   assert.match(report, /✅ 运行状态/);
   assert.match(report, /📨 转发统计/);
   assert.match(report, /• 今日转发：1/);
@@ -59,6 +65,7 @@ test("formats keepalive and daily reports", () => {
   assert.match(report, /⚠️ 异常摘要/);
   assert.match(report, /• 已跳过：1/);
   assert.match(report, /• 错误数：1/);
+  assert.match(report, /• 最近错误：有错误，请查看运行日志/);
   assert.match(report, /🧭 跳过原因/);
   assert.match(report, /• 跳过目标会话：1/);
   assert.match(report, /🛠️ 错误原因/);

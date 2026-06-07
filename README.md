@@ -162,7 +162,7 @@ USERBOT_DROP_AUTHOR=false
 USERBOT_PROTECT_CONTENT=false
 USERBOT_KEEPALIVE_ENABLED=true
 USERBOT_KEEPALIVE_INTERVAL_MINUTES=360
-USERBOT_KEEPALIVE_MESSAGE=Telegram 转发器保活
+USERBOT_KEEPALIVE_MESSAGE=📡 转发器保活提醒
 USERBOT_DAILY_REPORT_ENABLED=true
 USERBOT_DAILY_REPORT_TIME=23:55
 USERBOT_DAILY_REPORT_TIMEZONE_OFFSET=+08:00
@@ -203,7 +203,7 @@ USERBOT_DAILY_REPORT_TIMEZONE_OFFSET=+08:00
 
 保活消息会发送到 `TELEGRAM_TARGET`，用于确认 TeleBridge 仍在运行。默认每 6 小时发送一次。
 
-内容包括：
+保活通知使用中文和 emoji 展示，内容包括：
 
 - 当前时间
 - 连接状态
@@ -211,12 +211,14 @@ USERBOT_DAILY_REPORT_TIMEZONE_OFFSET=+08:00
 - 目标会话
 - 当日已转发数量
 - 当日错误数量
+- 最近转发时间
+- 最近错误状态
 
 ## 当日转发汇总日报
 
 日报默认按 `+08:00` 时区每天 `23:55` 发送到 `TELEGRAM_TARGET`。
 
-日报包含：
+日报通知使用中文和 emoji 分段展示，内容包括：
 
 - 当日转发总数
 - 私聊、群聊、频道、官方通知分类数量

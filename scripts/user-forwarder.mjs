@@ -376,7 +376,7 @@ function loadFallbackConfig() {
     noForwards: false,
     keepaliveEnabled: false,
     keepaliveIntervalMinutes: 360,
-    keepaliveMessage: "Telegram 转发器保活",
+    keepaliveMessage: "📡 转发器保活提醒",
     dailyReportEnabled: false,
     dailyReportTime: "23:55",
     dailyReportTimezoneOffset: "+08:00",

@@ -14,7 +14,7 @@ export function loadUserbotConfig(env = process.env) {
     noForwards: parseBoolean(env.USERBOT_PROTECT_CONTENT, false),
     keepaliveEnabled: parseBoolean(env.USERBOT_KEEPALIVE_ENABLED, true),
     keepaliveIntervalMinutes: parseInteger(env.USERBOT_KEEPALIVE_INTERVAL_MINUTES, 360),
-    keepaliveMessage: stringValue(env.USERBOT_KEEPALIVE_MESSAGE) || "Telegram 转发器保活",
+    keepaliveMessage: stringValue(env.USERBOT_KEEPALIVE_MESSAGE) || "📡 转发器保活提醒",
     dailyReportEnabled: parseBoolean(env.USERBOT_DAILY_REPORT_ENABLED, true),
     dailyReportTime: stringValue(env.USERBOT_DAILY_REPORT_TIME) || "23:55",
     dailyReportTimezoneOffset: stringValue(env.USERBOT_DAILY_REPORT_TIMEZONE_OFFSET) || "+08:00",
