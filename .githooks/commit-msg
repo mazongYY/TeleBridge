@@ -31,7 +31,9 @@ if (!match) {
     "格式：<中文类型>(<作用域>): <emoji> <中文简短描述>",
     "示例：功能(userbot): ✨ 增加保活消息通知",
     "",
-    `允许的中文类型：${allowedTypes.join("、")}`
+    `允许的中文类型：${allowedTypes.join("、")}`,
+    "",
+    "推荐的作用域：userbot、forwarder、config、runtime、docker、cloudflare、wrangler、scripts、test、docs、deps"
   ]);
 }
 

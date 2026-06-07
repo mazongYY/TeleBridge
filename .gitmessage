@@ -15,10 +15,23 @@
 # 维护   构建过程、依赖、配置或辅助工具变更
 # 回滚   回滚提交
 #
-# 作用域使用中文或英文模块名，例如：
-# userbot、docker、HuggingFace、GitHub、文档、配置、测试、部署
+# 作用域推荐使用以下项目模块名：
+# userbot      - Telegram UserBot 核心逻辑 (scripts/userbot-*.mjs)
+# forwarder    - 消息转发器 (scripts/user-forwarder.mjs)
+# config       - 配置管理 (scripts/userbot-config.mjs)
+# runtime      - 运行时逻辑 (scripts/userbot-runtime.mjs)
+# login        - 登录认证 (scripts/login-user.mjs)
+# cloudflare   - Cloudflare Workers 相关 (src/index.js, wrangler.jsonc)
+# docker       - Docker 配置 (Dockerfile, docker-compose.yml)
+# scripts      - 其他脚本文件
+# test         - 测试代码 (test/*.test.mjs)
+# docs         - 文档 (README.md)
+# deps         - 依赖管理 (package.json, package-lock.json)
+# workflow     - CI/CD 工作流 (.github/workflows)
 #
-# emoji 放在简短描述前，用于表达变更类别。
+# emoji 放在简短描述前，用于表达变更类别：
+# ✨ 新功能  🐛 修复  📝 文档  💄 样式  ♻️ 重构  ⚡ 性能  ✅ 测试  🔧 维护  ⏪ 回滚
+#
 # 简短描述必须使用中文，结尾不加句号。
 #
 # 正文可选，空一行后填写，使用中文说明为什么做这个变更。
@@ -28,5 +41,7 @@
 #
 # 示例：
 # 功能(userbot): ✨ 增加保活消息通知
-# 修复(docker): 🐛 修复容器目录权限
+# 修复(forwarder): 🐛 修复消息转发失败问题
 # 文档(README): 📝 重写部署说明
+# 维护(docker): 🔧 优化容器构建流程
+# 测试(config): ✅ 增加配置验证测试
