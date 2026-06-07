@@ -6,6 +6,7 @@ export function loadUserbotConfig(env = process.env) {
     target: requiredString(env.TELEGRAM_TARGET, "TELEGRAM_TARGET"),
     allowedSourceChats: parseList(env.USERBOT_ALLOWED_SOURCE_CHATS),
     blockedSourceChats: parseList(env.USERBOT_BLOCKED_SOURCE_CHATS),
+    monitoredChatTypes: parseMonitoredChatTypes(env.USERBOT_MONITORED_CHAT_TYPES),
     skipTargetChat: parseBoolean(env.USERBOT_SKIP_TARGET_CHAT, true),
     includeOutgoing: parseBoolean(env.USERBOT_INCLUDE_OUTGOING, true),
     silent: parseBoolean(env.USERBOT_SILENT, false),
@@ -65,11 +66,63 @@ export function shouldForwardUserMessage(message, sourcePeerId, targetPeerId, co
   return { ok: true };
 }
 
+export function shouldForwardUserChatType(chatType, config) {
+  if (!chatType) {
+    return { ok: false, reason: "unknown_chat_type" };
+  }
+
+  if (!config.monitoredChatTypes?.includes(chatType)) {
+    return { ok: false, reason: `chat_type_${chatType}_not_monitored` };
+  }
+
+  return { ok: true };
+}
+
+export function resolveMonitoredChatType(event, sourcePeerId) {
+  if (normalizeId(sourcePeerId) === "777000") {
+    return "official";
+  }
+
+  if (event?.isGroup) {
+    return "group";
+  }
+
+  if (event?.isChannel) {
+    return "channel";
+  }
+
+  if (event?.isPrivate) {
+    return "private";
+  }
+
+  return "unknown";
+}
+
 export function parseList(value) {
   return String(value || "")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+export function parseMonitoredChatTypes(value) {
+  const types = parseList(value || "private,group,channel,official")
+    .map((type) => type.toLowerCase())
+    .map((type) => {
+      if (type === "groups") return "group";
+      if (type === "channels") return "channel";
+      if (type === "privates" || type === "private_chat") return "private";
+      if (type === "official_notification" || type === "telegram") return "official";
+      return type;
+    });
+  const allowed = new Set(["private", "group", "channel", "official"]);
+  const invalid = types.filter((type) => !allowed.has(type));
+
+  if (invalid.length > 0) {
+    throw new Error(`USERBOT_MONITORED_CHAT_TYPES contains invalid values: ${invalid.join(", ")}`);
+  }
+
+  return [...new Set(types)];
 }
 
 export function normalizeId(value) {

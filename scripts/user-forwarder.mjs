@@ -8,6 +8,8 @@ import { StringSession } from "telegram/sessions/index.js";
 import {
   loadUserbotConfig,
   normalizeId,
+  resolveMonitoredChatType,
+  shouldForwardUserChatType,
   shouldForwardUserMessage
 } from "./userbot-config.mjs";
 
@@ -95,6 +97,14 @@ async function handleNewMessage(client, event, targetEntity, targetPeerId, runti
   const message = event.message;
   const sourcePeer = message.peerId || event.chatId || message.chatId;
   const sourcePeerId = sourcePeer ? await client.getPeerId(sourcePeer, true) : "";
+  const chatType = resolveMonitoredChatType(event, sourcePeerId);
+  const chatTypeDecision = shouldForwardUserChatType(chatType, runtimeConfig);
+
+  if (!chatTypeDecision.ok) {
+    logDebug(`Skipped message ${message.id}: ${chatTypeDecision.reason}`);
+    return;
+  }
+
   const decision = shouldForwardUserMessage(message, sourcePeerId, targetPeerId, runtimeConfig);
 
   if (!decision.ok) {

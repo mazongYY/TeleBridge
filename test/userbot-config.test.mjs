@@ -4,6 +4,9 @@ import test from "node:test";
 import {
   loadUserbotConfig,
   parseList,
+  parseMonitoredChatTypes,
+  resolveMonitoredChatType,
+  shouldForwardUserChatType,
   shouldForwardUserMessage,
   validateLoginConfig
 } from "../scripts/userbot-config.mjs";
@@ -23,9 +26,47 @@ test("loads required userbot config from env", () => {
   assert.equal(config.session, "session");
   assert.equal(config.target, "-100777");
   assert.deepEqual(config.allowedSourceChats, ["1", "2"]);
+  assert.deepEqual(config.monitoredChatTypes, ["private", "group", "channel", "official"]);
   assert.equal(config.skipTargetChat, false);
   assert.equal(config.healthHost, "0.0.0.0");
   assert.equal(config.healthPort, 7860);
+});
+
+test("loads configured monitored chat types", () => {
+  const config = loadUserbotConfig({
+    TELEGRAM_API_ID: "12345",
+    TELEGRAM_API_HASH: "hash",
+    TELEGRAM_USER_SESSION: "session",
+    TELEGRAM_TARGET: "-100777",
+    USERBOT_MONITORED_CHAT_TYPES: "group, channel"
+  });
+
+  assert.deepEqual(config.monitoredChatTypes, ["group", "channel"]);
+});
+
+test("rejects invalid monitored chat types", () => {
+  assert.throws(
+    () => parseMonitoredChatTypes("private,secret"),
+    /USERBOT_MONITORED_CHAT_TYPES contains invalid values: secret/
+  );
+});
+
+test("resolves monitored chat type from event flags", () => {
+  assert.equal(resolveMonitoredChatType({ isPrivate: true }, "777000"), "official");
+  assert.equal(resolveMonitoredChatType({ isPrivate: true }, "123"), "private");
+  assert.equal(resolveMonitoredChatType({ isGroup: true }, "-123"), "group");
+  assert.equal(resolveMonitoredChatType({ isChannel: true }, "-100123"), "channel");
+  assert.equal(resolveMonitoredChatType({}, "42"), "unknown");
+});
+
+test("filters by monitored chat type", () => {
+  const config = {
+    monitoredChatTypes: ["group", "channel"]
+  };
+
+  assert.equal(shouldForwardUserChatType("group", config).ok, true);
+  assert.equal(shouldForwardUserChatType("private", config).ok, false);
+  assert.equal(shouldForwardUserChatType("private", config).reason, "chat_type_private_not_monitored");
 });
 
 test("uses PORT for health checks when provided", () => {
