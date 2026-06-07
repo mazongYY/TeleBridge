@@ -5,6 +5,8 @@ ENV PORT=7860
 
 WORKDIR /home/node/app
 
+RUN chown -R node:node /home/node/app
+
 COPY --chown=node:node package.json package-lock.json ./
 
 USER node
