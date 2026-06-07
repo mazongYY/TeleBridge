@@ -1,5 +1,5 @@
 ---
-title: Telegram User Forwarder
+title: TeleBridge
 emoji: 📬
 colorFrom: blue
 colorTo: gray
@@ -7,81 +7,160 @@ sdk: docker
 app_port: 7860
 ---
 
-# Telegram User Forwarder
+# TeleBridge
 
-一个 Docker 优先的 Telegram 消息转发器项目，包含两种模式：
+TeleBridge 是一个 Docker 优先的 Telegram 消息桥接器。它使用个人账号的 MTProto 会话监听该账号可见的新消息，并把消息转发到指定用户、群组、超级群或频道。
 
-- `userbot` 常驻模式：用个人账号登录 MTProto，转发该账号可见的新消息到指定群组/用户；这是容器默认主进程
-- `worker` webhook 模式：运行在 Cloudflare Workers 上，用 Bot API 转发 bot 可见的消息
+项目同时保留 Cloudflare Worker Bot API 模式，但默认主线是 Docker / Hugging Face Spaces 上运行的个人账号转发器。
 
-## 能做什么
+## 功能
 
-- 用个人账号转发私聊、群聊、频道里该账号可见的新消息
-- 将 bot 收到的私聊、群聊、频道消息转发到 `TARGET_CHAT_ID`
-- 支持 Telegram Business 连接账号产生的 `business_message`
-- 支持 `copyMessage` 和 `forwardMessage` 两种模式
-- 支持来源白名单、黑名单、bot 消息过滤
-- 提供受保护的管理接口来设置/删除/查看 webhook
+- 个人账号全量转发：私聊、群聊、超级群、频道、Telegram 官方服务通知
+- 按类别过滤来源：`private`、`group`、`channel`、`official`
+- 来源白名单和黑名单
+- 自动跳过目标会话，避免转发环路
+- 保活消息通知
+- 当日转发汇总日报
+- `/healthz` 健康检查和运行状态输出
+- 配置错误时容器不退出，便于 Hugging Face Space 保持端口在线并显示错误
 
-## 个人账号全量转发
+## 运行模型
 
-个人账号全量转发必须运行一个常驻 Node 进程。Cloudflare Workers 适合 HTTPS webhook，但不适合长期保持 MTProto 监听连接。
+TeleBridge 的个人账号转发需要长期保持 Telegram MTProto 连接，因此必须作为常驻 Node 进程运行。Cloudflare Workers 不适合承载这种长期连接，所以 Docker / Hugging Face Space 是推荐部署方式。
 
-### 1. 获取 Telegram API 凭证
+注意：代码可以避免应用自身因为配置错误退出，但不能绕过 Hugging Face 免费 Space 的平台休眠策略。需要持续在线时，应使用 Hugging Face 的付费硬件或其他常驻服务器。
 
-到 `https://my.telegram.org/apps` 创建应用，拿到：
+## 必填配置
 
-- `TELEGRAM_API_ID`
-- `TELEGRAM_API_HASH`
+在 Hugging Face Space 的 Settings 中添加以下 Secrets：
 
-### 2. 安装依赖
-
-```bash
-npm install
+```text
+TELEGRAM_API_ID
+TELEGRAM_API_HASH
+TELEGRAM_USER_SESSION
+TELEGRAM_TARGET
 ```
 
-### 3. 生成个人账号会话
+说明：
 
-设置环境变量后运行登录命令：
+- `TELEGRAM_API_ID`: 转发号使用，在 `https://my.telegram.org/apps` 创建应用后获得
+- `TELEGRAM_API_HASH`: 转发号使用，同上
+- `TELEGRAM_USER_SESSION`: 转发号登录后生成的会话字符串
+- `TELEGRAM_TARGET`: 接收方，可以是用户 ID、群组 ID、频道 ID 或 `@username`
+
+`TELEGRAM_API_HASH` 和 `TELEGRAM_USER_SESSION` 都是敏感信息，不要提交到 Git，也不要公开发到聊天里。
+
+## 生成 TELEGRAM_USER_SESSION
+
+在本机生成，不建议在 Hugging Face Space 中交互式登录。
+
+PowerShell：
+
+```powershell
+$env:TELEGRAM_API_ID="123456"
+$env:TELEGRAM_API_HASH="your_api_hash"
+npm run user:login
+```
+
+Bash：
 
 ```bash
 TELEGRAM_API_ID=123456 TELEGRAM_API_HASH=your_api_hash npm run user:login
 ```
 
-按提示输入手机号、验证码和二步验证密码。命令会输出 `TELEGRAM_USER_SESSION`，这是个人账号登录凭据，必须保密。
+按提示输入手机号、验证码和二步验证密码。成功后会输出：
 
-### 4. 启动个人账号转发
-
-```bash
-TELEGRAM_API_ID=123456 \
-TELEGRAM_API_HASH=your_api_hash \
-TELEGRAM_USER_SESSION=your_string_session \
-TELEGRAM_TARGET=-1001234567890 \
-npm run user:forward
+```text
+TELEGRAM_USER_SESSION=
+一长串字符串
 ```
 
-`TELEGRAM_TARGET` 可以是目标用户、群组、超级群组或频道，例如 `123456789`、`-1001234567890`、`@username`。
+把这串值保存为 Hugging Face Space Secret。
 
-常用可选项：
+## Hugging Face Spaces 部署
 
-- `USERBOT_ALLOWED_SOURCE_CHATS`: 只转发这些来源会话，逗号分隔；留空表示不限制
-- `USERBOT_BLOCKED_SOURCE_CHATS`: 不转发这些来源会话，逗号分隔
-- `USERBOT_MONITORED_CHAT_TYPES`: 需要监控的会话类别，逗号分隔，支持 `private`、`group`、`channel`、`official`，默认全部启用
-- `USERBOT_SKIP_TARGET_CHAT`: 是否跳过目标会话，默认 `true`，用于避免转发环路
-- `USERBOT_INCLUDE_OUTGOING`: 是否包含自己发出的消息，默认 `true`
-- `USERBOT_SILENT`: 是否静默转发，默认 `false`
-- `USERBOT_DROP_AUTHOR`: 是否隐藏原作者，默认 `false`
-- `USERBOT_PROTECT_CONTENT`: 是否保护转发后的内容，默认 `false`
-- `USERBOT_KEEPALIVE_ENABLED`: 是否发送保活消息到目标会话，默认 `true`
-- `USERBOT_KEEPALIVE_INTERVAL_MINUTES`: 保活消息间隔分钟数，默认 `360`
-- `USERBOT_KEEPALIVE_MESSAGE`: 保活消息标题，默认 `Telegram 转发器保活`
-- `USERBOT_DAILY_REPORT_ENABLED`: 是否发送每日转发汇总，默认 `true`
-- `USERBOT_DAILY_REPORT_TIME`: 日报发送时间，格式 `HH:mm`，默认 `23:55`
-- `USERBOT_DAILY_REPORT_TIMEZONE_OFFSET`: 日报时间对应时区，格式 `+08:00`，默认 `+08:00`
-- `USERBOT_RECONNECT_DELAY_MS`: 断线重连间隔，默认 `5000`
-- `USERBOT_LOG_LEVEL`: `info` 或 `debug`
+本项目 README 顶部已配置 Docker Space 元数据：
 
-示例：
+```yaml
+sdk: docker
+app_port: 7860
+```
+
+创建 Hugging Face Space 时选择 Docker SDK，然后推送代码：
+
+```bash
+git remote add space https://huggingface.co/spaces/你的用户名/你的Space名
+git push space main
+```
+
+当前示例 Space：
+
+```text
+https://huggingface.co/spaces/MorningGalaxyDawn/Telegram
+```
+
+## Docker 本地运行
+
+```bash
+docker build -t telebridge .
+docker run --rm -p 7860:7860 \
+  -e TELEGRAM_API_ID=123456 \
+  -e TELEGRAM_API_HASH=your_api_hash \
+  -e TELEGRAM_USER_SESSION=your_string_session \
+  -e TELEGRAM_TARGET=-1001234567890 \
+  telebridge
+```
+
+或使用 Compose：
+
+```bash
+docker compose up --build
+```
+
+## 健康检查
+
+容器监听 `0.0.0.0:7860`，用于 Hugging Face 判断服务是否启动，也用于查看 TeleBridge 状态。
+
+```bash
+curl http://localhost:7860/healthz
+```
+
+返回字段包含：
+
+- `ok`: 是否已连接且已授权
+- `connected`: 是否连接 Telegram
+- `authorized`: 账号会话是否有效
+- `targetPeerId`: 目标会话
+- `lastForwardedAt`: 最近转发时间
+- `lastKeepaliveAt`: 最近保活时间
+- `lastDailyReportAt`: 最近日报时间
+- `lastError`: 最近错误
+- `metrics`: 当日统计
+
+Telegram 消息监听和转发走 MTProto 连接，不走 `7860` 端口。
+
+## 可选配置
+
+```text
+USERBOT_MONITORED_CHAT_TYPES=private,group,channel,official
+USERBOT_ALLOWED_SOURCE_CHATS=
+USERBOT_BLOCKED_SOURCE_CHATS=
+USERBOT_SKIP_TARGET_CHAT=true
+USERBOT_INCLUDE_OUTGOING=true
+USERBOT_SILENT=false
+USERBOT_DROP_AUTHOR=false
+USERBOT_PROTECT_CONTENT=false
+USERBOT_KEEPALIVE_ENABLED=true
+USERBOT_KEEPALIVE_INTERVAL_MINUTES=360
+USERBOT_KEEPALIVE_MESSAGE=Telegram 转发器保活
+USERBOT_DAILY_REPORT_ENABLED=true
+USERBOT_DAILY_REPORT_TIME=23:55
+USERBOT_DAILY_REPORT_TIMEZONE_OFFSET=+08:00
+USERBOT_RECONNECT_DELAY_MS=5000
+USERBOT_LOG_LEVEL=info
+```
+
+类别过滤示例：
 
 ```text
 # 只转发群聊和频道
@@ -92,7 +171,11 @@ USERBOT_MONITORED_CHAT_TYPES=private
 
 # 只转发 Telegram 官方服务通知账号 777000
 USERBOT_MONITORED_CHAT_TYPES=official
+```
 
+保活和日报示例：
+
+```text
 # 每 2 小时发送一次保活消息
 USERBOT_KEEPALIVE_ENABLED=true
 USERBOT_KEEPALIVE_INTERVAL_MINUTES=120
@@ -103,184 +186,95 @@ USERBOT_DAILY_REPORT_TIME=23:55
 USERBOT_DAILY_REPORT_TIMEZONE_OFFSET=+08:00
 ```
 
-容器会在 `PORT` 指定端口提供健康检查，默认 `7860`：
+## 保活消息
 
-```bash
-curl http://localhost:7860/healthz
+保活消息会发送到 `TELEGRAM_TARGET`，用于确认 TeleBridge 仍在运行。默认每 6 小时发送一次。
+
+内容包括：
+
+- 当前时间
+- 连接状态
+- 授权状态
+- 目标会话
+- 当日已转发数量
+- 当日错误数量
+
+## 当日转发汇总日报
+
+日报默认按 `+08:00` 时区每天 `23:55` 发送到 `TELEGRAM_TARGET`。
+
+日报包含：
+
+- 当日转发总数
+- 私聊、群聊、频道、官方通知分类数量
+- 跳过数量
+- 错误数量
+- 最近转发时间
+- 最近错误
+- 跳过原因统计
+- 错误原因统计
+
+## GitHub
+
+目标仓库：
+
+```text
+git@github.com:mazongYY/TeleBridge.git
 ```
 
-即使 Telegram Secrets 缺失或登录失败，容器也会保持健康检查端口在线，并在 `/healthz` 的 `lastError` 字段显示错误；修正 Hugging Face Secrets 后重启 Space 即可重新连接。注意：这只能避免应用自身退出，不能绕过 Hugging Face 免费 Space 的平台休眠策略；需要持续在线时应使用 Hugging Face 的付费硬件/保持运行能力。
-
-## Docker 运行
-
-先生成 `TELEGRAM_USER_SESSION`，再运行容器：
+推荐远端名：
 
 ```bash
-docker build -t telegram-user-forwarder .
-docker run --rm -p 7860:7860 \
-  -e TELEGRAM_API_ID=123456 \
-  -e TELEGRAM_API_HASH=your_api_hash \
-  -e TELEGRAM_USER_SESSION=your_string_session \
-  -e TELEGRAM_TARGET=-1001234567890 \
-  telegram-user-forwarder
+git remote add origin git@github.com:mazongYY/TeleBridge.git
+git push -u origin main
 ```
 
-也可以用 `docker-compose.yml`：
+## 开发检查
 
 ```bash
-docker compose up --build
-```
-
-## 部署到 Hugging Face Spaces
-
-Hugging Face Docker Space 会读取 README 顶部的 YAML 元数据；本项目已设置：
-
-- `sdk: docker`
-- `app_port: 7860`
-
-创建 Space 时选择 Docker SDK，然后在 Space 的 Settings 中添加以下 Secrets：
-
-- `TELEGRAM_API_ID`
-- `TELEGRAM_API_HASH`
-- `TELEGRAM_USER_SESSION`
-- `TELEGRAM_TARGET`
-
-可选 Variables：
-
-- `USERBOT_ALLOWED_SOURCE_CHATS`
-- `USERBOT_BLOCKED_SOURCE_CHATS`
-- `USERBOT_MONITORED_CHAT_TYPES`
-- `USERBOT_SKIP_TARGET_CHAT`
-- `USERBOT_INCLUDE_OUTGOING`
-- `USERBOT_SILENT`
-- `USERBOT_DROP_AUTHOR`
-- `USERBOT_PROTECT_CONTENT`
-- `USERBOT_KEEPALIVE_ENABLED`
-- `USERBOT_KEEPALIVE_INTERVAL_MINUTES`
-- `USERBOT_KEEPALIVE_MESSAGE`
-- `USERBOT_DAILY_REPORT_ENABLED`
-- `USERBOT_DAILY_REPORT_TIME`
-- `USERBOT_DAILY_REPORT_TIMEZONE_OFFSET`
-- `USERBOT_RECONNECT_DELAY_MS`
-- `USERBOT_LOG_LEVEL`
-
-用 Git 推送到 Space：
-
-```bash
-git init
-git add .
-git commit -m "deploy telegram user forwarder"
-git remote add space https://huggingface.co/spaces/你的用户名/你的Space名
-git push space main
-```
-
-如果使用 Hugging Face token：
-
-```bash
-git remote add space https://你的用户名:你的HF_TOKEN@huggingface.co/spaces/你的用户名/你的Space名
-git push space main
-```
-
-## Cloudflare Worker Bot 模式
-
-这部分只适用于 bot/Business webhook，不是个人账号全量转发。
-
-### 配置项
-
-必填密钥：
-
-- `TELEGRAM_BOT_TOKEN`: BotFather 生成的 bot token
-- `WEBHOOK_SECRET`: Telegram webhook secret token
-- `ADMIN_TOKEN`: 管理接口 bearer token
-
-必填变量：
-
-- `TARGET_CHAT_ID`: 目标用户、群组、超级群组或频道 ID，例如 `123456789`、`-1001234567890`，也可以是部分支持场景下的 `@username`
-
-可选变量：
-
-- `FORWARD_MODE`: `copy` 或 `forward`，默认 `copy`
-- `ALLOWED_SOURCE_CHAT_IDS`: 允许转发的来源 chat id，逗号分隔；留空表示不限制
-- `BLOCKED_SOURCE_CHAT_IDS`: 禁止转发的来源 chat id，逗号分隔
-- `IGNORE_BOT_MESSAGES`: 是否忽略 bot 发出的消息，默认 `true`
-- `FORWARD_EDITED_MESSAGES`: 是否转发编辑消息，默认 `false`
-- `FALLBACK_TO_FORWARD`: `copyMessage` 失败后是否尝试 `forwardMessage`，默认 `false`
-- `DISABLE_NOTIFICATION`: 是否静默发送，默认 `false`
-- `PROTECT_CONTENT`: 是否保护转发后的内容，默认 `false`
-- `TARGET_MESSAGE_THREAD_ID`: 目标论坛话题 ID，可选
-- `ALLOWED_UPDATES`: 自定义 webhook allowed_updates，逗号分隔
-- `PUBLIC_WEBHOOK_URL`: 显式 webhook 地址；留空时管理接口会使用当前 Worker 域名拼出 `/webhook`
-
-### 本地开发
-
-本地密钥写入 `.dev.vars`：
-
-```bash
-TELEGRAM_BOT_TOKEN=123456:your-bot-token
-WEBHOOK_SECRET=change-me-webhook-secret
-ADMIN_TOKEN=change-me-admin-token
-TARGET_CHAT_ID=-1001234567890
-```
-
-启动本地 Worker：
-
-```bash
-npm run dev
-```
-
-运行检查：
-
-```bash
+npm install
 npm run check
 ```
 
-### 部署
+当前测试覆盖：
 
-设置 Cloudflare Worker secrets：
+- Worker webhook 转发逻辑
+- userbot 来源过滤
+- 监控类别过滤
+- 保活消息格式
+- 日报格式与定时计算
+- 健康检查端口配置
+
+## Cloudflare Worker Bot 模式
+
+这部分仅适用于 Bot API webhook，不适用于个人账号全量转发。
+
+必填 Secrets：
+
+```text
+TELEGRAM_BOT_TOKEN
+WEBHOOK_SECRET
+ADMIN_TOKEN
+```
+
+必填变量：
+
+```text
+TARGET_CHAT_ID
+```
+
+部署：
 
 ```bash
 npm run set-secret:bot
 npm run set-secret:webhook
 npm run set-secret:admin
-```
-
-编辑 `wrangler.jsonc` 中的 `TARGET_CHAT_ID`，然后部署：
-
-```bash
 npm run deploy
 ```
 
-部署后设置 webhook：
+设置 webhook：
 
 ```bash
 curl -X POST "https://你的-worker域名/admin/set-webhook?drop_pending_updates=true" \
   -H "Authorization: Bearer 你的ADMIN_TOKEN"
 ```
-
-查看 webhook：
-
-```bash
-curl "https://你的-worker域名/admin/webhook-info" \
-  -H "Authorization: Bearer 你的ADMIN_TOKEN"
-```
-
-测试 bot token：
-
-```bash
-curl "https://你的-worker域名/admin/get-me" \
-  -H "Authorization: Bearer 你的ADMIN_TOKEN"
-```
-
-删除 webhook：
-
-```bash
-curl -X POST "https://你的-worker域名/admin/delete-webhook" \
-  -H "Authorization: Bearer 你的ADMIN_TOKEN"
-```
-
-## 使用前准备
-
-1. 用 BotFather 创建 bot，拿到 `TELEGRAM_BOT_TOKEN`
-2. 把 bot 加入目标群组/频道，并确保它有发送消息权限
-3. 把 bot 加入需要监听的群组/频道；私聊转发需要用户主动和 bot 对话
-4. 如果转发 Telegram Business 账号消息，将 bot 连接到对应 Business 账号，并保持 webhook 的 `allowed_updates` 包含 `business_message`

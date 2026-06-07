@@ -225,7 +225,7 @@ function startHealthServer(runtimeConfig, runtimeState) {
     const url = new URL(request.url || "/", "http://localhost");
     const body = {
       ok: runtimeState.connected && runtimeState.authorized,
-      service: "telegram-user-forwarder",
+      service: "telebridge",
       ...runtimeState
     };
 

@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "telegram-cloudflare-forwarder",
+  "name": "telebridge",
   "main": "src/index.js",
   "compatibility_date": "2026-06-01",
   "observability": {
