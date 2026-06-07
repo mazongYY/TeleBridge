@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   extractMessage,
+  formatFeishuNotification,
   forwardUpdate,
   handleRequest,
   sendFeishuText,
@@ -84,16 +85,40 @@ test("sends Feishu notification after successful forwarding", async () => {
     msg_type: "text",
     content: {
       text: [
-        "TeleBridge 转发通知",
-        "更新类型: message",
-        "来源: Source Group (12345)",
-        "发送者: Alice",
-        "消息 ID: 10",
+        "📬 消息转发成功",
+        "🧩 消息类型：普通消息",
+        "💬 来源会话：Source Group (12345)",
+        "👤 发送者：Alice",
+        "🔢 消息编号：10",
         "",
+        "📝 消息内容",
         "hello"
       ].join("\n")
     }
   });
+});
+
+test("formats Feishu media notification with Chinese labels", () => {
+  const notification = formatFeishuNotification("channel_post", {
+    message_id: 20,
+    photo: [{ file_id: "photo" }],
+    chat: { id: -100888, title: "频道" },
+    sender_chat: { id: -100888, title: "频道" }
+  });
+
+  assert.equal(
+    notification,
+    [
+      "📬 消息转发成功",
+      "🧩 消息类型：频道消息",
+      "💬 来源会话：频道 (-100888)",
+      "👤 发送者：频道 (-100888)",
+      "🔢 消息编号：20",
+      "",
+      "📎 消息摘要",
+      "图片消息"
+    ].join("\n")
+  );
 });
 
 test("reports Feishu webhook API errors without failing forwarding", async () => {

@@ -28,6 +28,13 @@ let config;
 let queue = Promise.resolve();
 let stopping = false;
 const state = createRuntimeState();
+const USERBOT_CHAT_TYPE_LABELS = {
+  private: "私聊",
+  group: "群聊",
+  channel: "频道",
+  official: "官方通知",
+  unknown: "未知类型"
+};
 
 try {
   config = loadUserbotConfig();
@@ -177,19 +184,23 @@ async function sendFeishuForwardNotification(runtimeConfig, event, message, sour
 
 function formatUserbotFeishuNotification(event, message, sourcePeerId, chatType) {
   const lines = [
-    "TeleBridge 转发通知",
-    `来源类型: ${chatType}`,
-    `来源 Peer: ${normalizeId(sourcePeerId)}`,
-    `来源: ${formatUserbotChatLabel(event?.chat)}`,
-    `消息 ID: ${message.id}`
+    "📬 消息转发成功",
+    `🧩 来源类型：${formatUserbotChatTypeLabel(chatType)}`,
+    `💬 来源会话：${formatUserbotChatLabel(event?.chat)}`,
+    `🆔 来源会话编号：${normalizeId(sourcePeerId)}`,
+    `🔢 消息编号：${message.id}`
   ];
 
   const preview = getUserbotMessagePreview(message);
   if (preview) {
-    lines.push("", preview);
+    lines.push("", formatUserbotPreviewTitle(message), preview);
   }
 
   return lines.join("\n");
+}
+
+function formatUserbotChatTypeLabel(chatType) {
+  return USERBOT_CHAT_TYPE_LABELS[chatType] || "未知类型";
 }
 
 function formatUserbotChatLabel(chat) {
@@ -210,10 +221,30 @@ function getUserbotMessagePreview(message) {
   }
 
   if (message.media) {
-    return `[${message.media.className || "media"}]`;
+    return formatUserbotMediaLabel(message.media.className);
   }
 
   return "";
+}
+
+function formatUserbotPreviewTitle(message) {
+  return message.message || message.text ? "📝 消息内容" : "📎 消息摘要";
+}
+
+function formatUserbotMediaLabel(className) {
+  const labels = {
+    MessageMediaPhoto: "图片消息",
+    MessageMediaDocument: "文件消息",
+    MessageMediaGeo: "位置消息",
+    MessageMediaContact: "联系人消息",
+    MessageMediaPoll: "投票消息",
+    MessageMediaWebPage: "网页预览消息",
+    MessageMediaDice: "骰子消息",
+    MessageMediaVenue: "地点消息",
+    MessageMediaGame: "游戏消息"
+  };
+
+  return labels[className] || "媒体消息";
 }
 
 function truncateText(value, maxLength) {

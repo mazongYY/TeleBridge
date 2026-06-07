@@ -241,16 +241,16 @@ export async function sendFeishuText(webhookUrl, text, fetcher = fetch) {
 
 export function formatFeishuNotification(updateType, message) {
   const lines = [
-    "TeleBridge 转发通知",
-    `更新类型: ${updateType}`,
-    `来源: ${formatChatLabel(message.chat)}`,
-    `发送者: ${formatSenderLabel(message)}`,
-    `消息 ID: ${message.message_id}`
+    "📬 消息转发成功",
+    `🧩 消息类型：${formatUpdateTypeLabel(updateType)}`,
+    `💬 来源会话：${formatChatLabel(message.chat)}`,
+    `👤 发送者：${formatSenderLabel(message)}`,
+    `🔢 消息编号：${message.message_id}`
   ];
 
   const preview = getMessagePreview(message);
   if (preview) {
-    lines.push("", preview);
+    lines.push("", formatMessagePreviewTitle(message), preview);
   }
 
   return lines.join("\n");
@@ -459,23 +459,40 @@ function formatSenderLabel(message) {
   return id ? `${name} (${id})` : name;
 }
 
+function formatUpdateTypeLabel(updateType) {
+  const labels = {
+    message: "普通消息",
+    channel_post: "频道消息",
+    business_message: "商务消息",
+    edited_message: "编辑后的普通消息",
+    edited_channel_post: "编辑后的频道消息",
+    edited_business_message: "编辑后的商务消息"
+  };
+
+  return labels[updateType] || "未知消息类型";
+}
+
+function formatMessagePreviewTitle(message) {
+  return message.text || message.caption ? "📝 消息内容" : "📎 消息摘要";
+}
+
 function getMessagePreview(message) {
   const text = message.text || message.caption;
   if (text) {
     return truncateText(text, 1800);
   }
 
-  if (message.photo) return "[photo]";
-  if (message.video) return "[video]";
-  if (message.document) return "[document]";
-  if (message.audio) return "[audio]";
-  if (message.voice) return "[voice]";
-  if (message.video_note) return "[video_note]";
-  if (message.sticker) return "[sticker]";
-  if (message.animation) return "[animation]";
-  if (message.contact) return "[contact]";
-  if (message.location) return "[location]";
-  if (message.poll) return "[poll]";
+  if (message.photo) return "图片消息";
+  if (message.video) return "视频消息";
+  if (message.document) return "文件消息";
+  if (message.audio) return "音频消息";
+  if (message.voice) return "语音消息";
+  if (message.video_note) return "视频便签";
+  if (message.sticker) return "贴纸消息";
+  if (message.animation) return "动画消息";
+  if (message.contact) return "联系人消息";
+  if (message.location) return "位置消息";
+  if (message.poll) return "投票消息";
   return "";
 }
 
