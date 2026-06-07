@@ -42,15 +42,27 @@ test("formats keepalive and daily reports", () => {
   state.authorized = true;
   state.targetPeerId = "-1001";
   recordForwarded(state, "private", new Date("2026-06-07T01:00:00.000Z"));
+  recordSkipped(state, "target_chat_skipped");
+  recordError(state, "feishu_webhook_error");
+  state.lastError = "飞书 Webhook 返回错误";
 
   const keepalive = formatKeepaliveMessage(state, config, new Date("2026-06-07T02:00:00.000Z"));
   assert.match(keepalive, /保活测试/);
   assert.match(keepalive, /forwarded_today: 1/);
 
   const report = formatDailyReport(state, config, new Date("2026-06-07T15:55:00.000Z"));
-  assert.match(report, /Telegram 转发日报/);
-  assert.match(report, /forwarded: 1/);
-  assert.match(report, /private: 1/);
+  assert.match(report, /📊 TeleBridge 转发日报/);
+  assert.match(report, /✅ 运行状态/);
+  assert.match(report, /📨 转发统计/);
+  assert.match(report, /• 今日转发：1/);
+  assert.match(report, /• 私聊：1/);
+  assert.match(report, /⚠️ 异常摘要/);
+  assert.match(report, /• 已跳过：1/);
+  assert.match(report, /• 错误数：1/);
+  assert.match(report, /🧭 跳过原因/);
+  assert.match(report, /• 跳过目标会话：1/);
+  assert.match(report, /🛠️ 错误原因/);
+  assert.match(report, /• 飞书通知发送失败：1/);
 });
 
 test("calculates next daily report delay with timezone offset", () => {

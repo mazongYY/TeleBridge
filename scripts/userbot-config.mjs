@@ -18,6 +18,7 @@ export function loadUserbotConfig(env = process.env) {
     dailyReportEnabled: parseBoolean(env.USERBOT_DAILY_REPORT_ENABLED, true),
     dailyReportTime: stringValue(env.USERBOT_DAILY_REPORT_TIME) || "23:55",
     dailyReportTimezoneOffset: stringValue(env.USERBOT_DAILY_REPORT_TIMEZONE_OFFSET) || "+08:00",
+    feishuWebhookUrl: stringValue(env.FEISHU_WEBHOOK_URL),
     reconnectDelayMs: parseInteger(env.USERBOT_RECONNECT_DELAY_MS, 5000),
     healthHost: stringValue(env.USERBOT_HEALTH_HOST) || "0.0.0.0",
     healthPort: parseInteger(env.PORT || env.USERBOT_HEALTH_PORT, 7860),

@@ -13,7 +13,8 @@
     "deploy": "wrangler deploy",
     "set-secret:bot": "wrangler secret put TELEGRAM_BOT_TOKEN",
     "set-secret:webhook": "wrangler secret put WEBHOOK_SECRET",
-    "set-secret:admin": "wrangler secret put ADMIN_TOKEN"
+    "set-secret:admin": "wrangler secret put ADMIN_TOKEN",
+    "set-secret:feishu": "wrangler secret put FEISHU_WEBHOOK_URL"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

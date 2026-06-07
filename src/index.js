@@ -84,17 +84,18 @@ export async function forwardUpdate(update, env, fetcher = fetch) {
   const primaryResult = await sendTelegramForward(primaryMethod, message, env, fetcher);
 
   if (primaryResult.ok || primaryMethod === "forwardMessage" || !truthy(env.FALLBACK_TO_FORWARD)) {
-    return {
+    const result = {
       ...primaryResult,
       update_type: updateType,
       source_chat_id: normalizeChatId(message.chat?.id),
       message_id: message.message_id,
       method: primaryMethod
     };
+    return attachFeishuNotification(result, message, updateType, env, fetcher);
   }
 
   const fallbackResult = await sendTelegramForward("forwardMessage", message, env, fetcher);
-  return {
+  const result = {
     ...fallbackResult,
     update_type: updateType,
     source_chat_id: normalizeChatId(message.chat?.id),
@@ -103,6 +104,7 @@ export async function forwardUpdate(update, env, fetcher = fetch) {
     fallback_from: "copyMessage",
     primary_error: primaryResult.description || primaryResult.error
   };
+  return attachFeishuNotification(result, message, updateType, env, fetcher);
 }
 
 export function extractMessage(update, env) {
@@ -194,6 +196,90 @@ export async function sendTelegramForward(method, message, env, fetcher = fetch)
   }
 
   return { ok: true, result: body.result };
+}
+
+export async function sendFeishuText(webhookUrl, text, fetcher = fetch) {
+  const normalizedUrl = String(webhookUrl || "").trim();
+  if (!normalizedUrl) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "missing_FEISHU_WEBHOOK_URL"
+    };
+  }
+
+  const response = await fetcher(normalizedUrl, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({
+      msg_type: "text",
+      content: {
+        text
+      }
+    })
+  });
+
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    body = { msg: "Feishu returned a non-JSON response" };
+  }
+
+  const responseCode = body.code ?? body.StatusCode;
+  if (!response.ok || responseCode !== 0) {
+    return {
+      ok: false,
+      error: "feishu_webhook_error",
+      status: response.status,
+      description: body.msg || body.StatusMessage || response.statusText
+    };
+  }
+
+  return { ok: true };
+}
+
+export function formatFeishuNotification(updateType, message) {
+  const lines = [
+    "TeleBridge 转发通知",
+    `更新类型: ${updateType}`,
+    `来源: ${formatChatLabel(message.chat)}`,
+    `发送者: ${formatSenderLabel(message)}`,
+    `消息 ID: ${message.message_id}`
+  ];
+
+  const preview = getMessagePreview(message);
+  if (preview) {
+    lines.push("", preview);
+  }
+
+  return lines.join("\n");
+}
+
+async function attachFeishuNotification(result, message, updateType, env, fetcher) {
+  if (!result.ok || !env.FEISHU_WEBHOOK_URL) {
+    return result;
+  }
+
+  let feishu;
+  try {
+    feishu = await sendFeishuText(
+      env.FEISHU_WEBHOOK_URL,
+      formatFeishuNotification(updateType, message),
+      fetcher
+    );
+  } catch (error) {
+    feishu = {
+      ok: false,
+      error: "feishu_webhook_error",
+      description: formatError(error)
+    };
+  }
+
+  return {
+    ...result,
+    feishu
+  };
 }
 
 async function handleAdminRequest(request, env, url) {
@@ -350,6 +436,64 @@ function normalizeOptionalInteger(value) {
 
   const parsed = Number.parseInt(String(value), 10);
   return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+function formatChatLabel(chat) {
+  if (!chat) {
+    return "未知来源";
+  }
+
+  const name = chat.title || [chat.first_name, chat.last_name].filter(Boolean).join(" ") || chat.username || "未命名会话";
+  const id = normalizeChatId(chat.id);
+  return id ? `${name} (${id})` : name;
+}
+
+function formatSenderLabel(message) {
+  const sender = message.from || message.sender_chat;
+  if (!sender) {
+    return "未知发送者";
+  }
+
+  const name = sender.title || [sender.first_name, sender.last_name].filter(Boolean).join(" ") || sender.username || "未命名发送者";
+  const id = normalizeChatId(sender.id);
+  return id ? `${name} (${id})` : name;
+}
+
+function getMessagePreview(message) {
+  const text = message.text || message.caption;
+  if (text) {
+    return truncateText(text, 1800);
+  }
+
+  if (message.photo) return "[photo]";
+  if (message.video) return "[video]";
+  if (message.document) return "[document]";
+  if (message.audio) return "[audio]";
+  if (message.voice) return "[voice]";
+  if (message.video_note) return "[video_note]";
+  if (message.sticker) return "[sticker]";
+  if (message.animation) return "[animation]";
+  if (message.contact) return "[contact]";
+  if (message.location) return "[location]";
+  if (message.poll) return "[poll]";
+  return "";
+}
+
+function truncateText(value, maxLength) {
+  const normalized = String(value || "").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 3)}...`;
+}
+
+function formatError(error) {
+  if (!error) {
+    return "unknown error";
+  }
+
+  return error.message || String(error);
 }
 
 function truthy(value) {

@@ -5,6 +5,7 @@ import { TelegramClient } from "telegram";
 import { NewMessage } from "telegram/events/index.js";
 import { StringSession } from "telegram/sessions/index.js";
 
+import { sendFeishuText } from "../src/index.js";
 import {
   loadUserbotConfig,
   normalizeId,
@@ -144,11 +145,84 @@ async function handleNewMessage(client, event, targetEntity, targetPeerId, runti
 
     recordForwarded(state, chatType);
     console.log(`Forwarded message ${message.id} from ${normalizeId(sourcePeerId)} to ${targetPeerId}`);
+    await sendFeishuForwardNotification(runtimeConfig, event, message, sourcePeerId, chatType);
   } catch (error) {
     state.lastError = formatError(error);
     recordError(state, error?.errorMessage || error?.code || "forward_error");
     console.error(`Failed to forward message ${message.id} from ${normalizeId(sourcePeerId)}:`, state.lastError);
   }
+}
+
+async function sendFeishuForwardNotification(runtimeConfig, event, message, sourcePeerId, chatType) {
+  if (!runtimeConfig.feishuWebhookUrl) {
+    return;
+  }
+
+  try {
+    const result = await sendFeishuText(
+      runtimeConfig.feishuWebhookUrl,
+      formatUserbotFeishuNotification(event, message, sourcePeerId, chatType)
+    );
+    if (!result.ok) {
+      state.lastError = result.description || result.error || "feishu_webhook_error";
+      recordError(state, "feishu_webhook_error");
+      console.error("Failed to send Feishu notification:", state.lastError);
+    }
+  } catch (error) {
+    state.lastError = formatError(error);
+    recordError(state, "feishu_webhook_error");
+    console.error("Failed to send Feishu notification:", state.lastError);
+  }
+}
+
+function formatUserbotFeishuNotification(event, message, sourcePeerId, chatType) {
+  const lines = [
+    "TeleBridge 转发通知",
+    `来源类型: ${chatType}`,
+    `来源 Peer: ${normalizeId(sourcePeerId)}`,
+    `来源: ${formatUserbotChatLabel(event?.chat)}`,
+    `消息 ID: ${message.id}`
+  ];
+
+  const preview = getUserbotMessagePreview(message);
+  if (preview) {
+    lines.push("", preview);
+  }
+
+  return lines.join("\n");
+}
+
+function formatUserbotChatLabel(chat) {
+  if (!chat) {
+    return "未知来源";
+  }
+
+  return chat.title ||
+    [chat.firstName, chat.lastName].filter(Boolean).join(" ") ||
+    chat.username ||
+    "未命名会话";
+}
+
+function getUserbotMessagePreview(message) {
+  const text = message.message || message.text;
+  if (text) {
+    return truncateText(text, 1800);
+  }
+
+  if (message.media) {
+    return `[${message.media.className || "media"}]`;
+  }
+
+  return "";
+}
+
+function truncateText(value, maxLength) {
+  const normalized = String(value || "").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 3)}...`;
 }
 
 function startNotificationSchedulers(client, targetEntity, runtimeConfig, runtimeState) {
@@ -275,6 +349,7 @@ function loadFallbackConfig() {
     dailyReportEnabled: false,
     dailyReportTime: "23:55",
     dailyReportTimezoneOffset: "+08:00",
+    feishuWebhookUrl: String(process.env.FEISHU_WEBHOOK_URL || "").trim(),
     reconnectDelayMs: 5000,
     healthHost: String(process.env.USERBOT_HEALTH_HOST || "0.0.0.0"),
     healthPort: Number.parseInt(String(process.env.PORT || process.env.USERBOT_HEALTH_PORT || "7860"), 10) || 7860,

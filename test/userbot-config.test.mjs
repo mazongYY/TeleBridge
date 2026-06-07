@@ -18,7 +18,8 @@ test("loads required userbot config from env", () => {
     TELEGRAM_USER_SESSION: "session",
     TELEGRAM_TARGET: "-100777",
     USERBOT_ALLOWED_SOURCE_CHATS: "1, 2",
-    USERBOT_SKIP_TARGET_CHAT: "false"
+    USERBOT_SKIP_TARGET_CHAT: "false",
+    FEISHU_WEBHOOK_URL: "https://open.feishu.cn/open-apis/bot/v2/hook/test-token"
   });
 
   assert.equal(config.apiId, 12345);
@@ -28,6 +29,7 @@ test("loads required userbot config from env", () => {
   assert.deepEqual(config.allowedSourceChats, ["1", "2"]);
   assert.deepEqual(config.monitoredChatTypes, ["private", "group", "channel", "official"]);
   assert.equal(config.skipTargetChat, false);
+  assert.equal(config.feishuWebhookUrl, "https://open.feishu.cn/open-apis/bot/v2/hook/test-token");
   assert.equal(config.healthHost, "0.0.0.0");
   assert.equal(config.healthPort, 7860);
 });

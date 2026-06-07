@@ -1,12 +1,3 @@
----
-title: TeleBridge
-emoji: 📬
-colorFrom: blue
-colorTo: gray
-sdk: docker
-app_port: 7860
----
-
 # TeleBridge
 
 TeleBridge 是一个 Docker 优先的 Telegram 消息桥接器。它使用个人账号的 MTProto 会话监听该账号可见的新消息，并把消息转发到指定用户、群组、超级群或频道。
@@ -19,6 +10,7 @@ TeleBridge 是一个 Docker 优先的 Telegram 消息桥接器。它使用个人
 - 按类别过滤来源：`private`、`group`、`channel`、`official`
 - 来源白名单和黑名单
 - 自动跳过目标会话，避免转发环路
+- 飞书自定义机器人 Webhook 通知
 - 保活消息通知
 - 当日转发汇总日报
 - `/healthz` 健康检查和运行状态输出
@@ -49,6 +41,14 @@ TELEGRAM_TARGET
 - `TELEGRAM_TARGET`: 接收方，可以是用户 ID、群组 ID、频道 ID 或 `@username`
 
 `TELEGRAM_API_HASH` 和 `TELEGRAM_USER_SESSION` 都是敏感信息，不要提交到 Git，也不要公开发到聊天里。
+
+可选飞书通知：
+
+```text
+FEISHU_WEBHOOK_URL
+```
+
+`FEISHU_WEBHOOK_URL` 是飞书自定义机器人的 Webhook 地址。配置后，每次 Telegram 消息成功转发时，TeleBridge 会额外发送一条飞书文本通知；不配置则关闭飞书通知。Webhook 地址包含机器人凭据，建议在 Hugging Face Space Secrets、Docker 环境变量或 Cloudflare Worker Secret 中保存。
 
 ## 生成 TELEGRAM_USER_SESSION
 
@@ -108,6 +108,7 @@ docker run --rm -p 7860:7860 \
   -e TELEGRAM_API_HASH=your_api_hash \
   -e TELEGRAM_USER_SESSION=your_string_session \
   -e TELEGRAM_TARGET=-1001234567890 \
+  -e FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/your-token \
   telebridge
 ```
 
@@ -156,9 +157,12 @@ USERBOT_KEEPALIVE_MESSAGE=Telegram 转发器保活
 USERBOT_DAILY_REPORT_ENABLED=true
 USERBOT_DAILY_REPORT_TIME=23:55
 USERBOT_DAILY_REPORT_TIMEZONE_OFFSET=+08:00
+FEISHU_WEBHOOK_URL=
 USERBOT_RECONNECT_DELAY_MS=5000
 USERBOT_LOG_LEVEL=info
 ```
+
+飞书通知内容包含来源类型、来源会话、消息 ID 和文本/媒体摘要。飞书 Webhook 请求失败只会记录到运行状态和日志，不会阻断 Telegram 转发。
 
 类别过滤示例：
 
@@ -257,6 +261,12 @@ WEBHOOK_SECRET
 ADMIN_TOKEN
 ```
 
+可选 Secret：
+
+```text
+FEISHU_WEBHOOK_URL
+```
+
 必填变量：
 
 ```text
@@ -269,6 +279,7 @@ TARGET_CHAT_ID
 npm run set-secret:bot
 npm run set-secret:webhook
 npm run set-secret:admin
+npm run set-secret:feishu # 可选，启用飞书通知时执行
 npm run deploy
 ```
 

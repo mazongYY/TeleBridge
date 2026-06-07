@@ -5,6 +5,7 @@ import {
   extractMessage,
   forwardUpdate,
   handleRequest,
+  sendFeishuText,
   shouldForwardMessage
 } from "../src/index.js";
 
@@ -46,6 +47,138 @@ test("forwards normal messages with copyMessage", async () => {
     from_chat_id: 12345,
     message_id: 10
   });
+});
+
+test("sends Feishu notification after successful forwarding", async () => {
+  const calls = [];
+  const fetcher = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) });
+    if (String(url).includes("open.feishu.cn")) {
+      return jsonTelegramResponse({ code: 0, msg: "success" });
+    }
+    return jsonTelegramResponse({ ok: true, result: { message_id: 999 } });
+  };
+
+  const result = await forwardUpdate(
+    {
+      update_id: 1,
+      message: {
+        message_id: 10,
+        text: "hello",
+        chat: { id: 12345, title: "Source Group" },
+        from: { is_bot: false, first_name: "Alice" }
+      }
+    },
+    {
+      ...baseEnv,
+      FEISHU_WEBHOOK_URL: "https://open.feishu.cn/open-apis/bot/v2/hook/test-token"
+    },
+    fetcher
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.feishu, { ok: true });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].url, "https://open.feishu.cn/open-apis/bot/v2/hook/test-token");
+  assert.deepEqual(calls[1].body, {
+    msg_type: "text",
+    content: {
+      text: [
+        "TeleBridge 转发通知",
+        "更新类型: message",
+        "来源: Source Group (12345)",
+        "发送者: Alice",
+        "消息 ID: 10",
+        "",
+        "hello"
+      ].join("\n")
+    }
+  });
+});
+
+test("reports Feishu webhook API errors without failing forwarding", async () => {
+  const fetcher = async (url) => {
+    if (String(url).includes("open.feishu.cn")) {
+      return jsonTelegramResponse({ code: 19001, msg: "invalid webhook" });
+    }
+    return jsonTelegramResponse({ ok: true, result: { message_id: 999 } });
+  };
+
+  const result = await forwardUpdate(
+    {
+      message: {
+        message_id: 11,
+        chat: { id: 12345 },
+        from: { is_bot: false }
+      }
+    },
+    {
+      ...baseEnv,
+      FEISHU_WEBHOOK_URL: "https://open.feishu.cn/open-apis/bot/v2/hook/test-token"
+    },
+    fetcher
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.feishu.ok, false);
+  assert.equal(result.feishu.error, "feishu_webhook_error");
+  assert.equal(result.feishu.status, 200);
+  assert.equal(result.feishu.description, "invalid webhook");
+});
+
+test("reports Feishu network errors without failing forwarding", async () => {
+  const fetcher = async (url) => {
+    if (String(url).includes("open.feishu.cn")) {
+      throw new Error("network down");
+    }
+    return jsonTelegramResponse({ ok: true, result: { message_id: 999 } });
+  };
+
+  const result = await forwardUpdate(
+    {
+      message: {
+        message_id: 12,
+        chat: { id: 12345 },
+        from: { is_bot: false }
+      }
+    },
+    {
+      ...baseEnv,
+      FEISHU_WEBHOOK_URL: "https://open.feishu.cn/open-apis/bot/v2/hook/test-token"
+    },
+    fetcher
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.feishu.ok, false);
+  assert.equal(result.feishu.error, "feishu_webhook_error");
+  assert.match(result.feishu.description, /network down/);
+});
+
+test("does not send Feishu notification when Telegram forwarding fails", async () => {
+  const calls = [];
+  const fetcher = async (url) => {
+    calls.push(String(url));
+    return jsonTelegramResponse({ ok: false, description: "telegram failed" }, 400);
+  };
+
+  const result = await forwardUpdate(
+    {
+      message: {
+        message_id: 13,
+        chat: { id: 12345 },
+        from: { is_bot: false }
+      }
+    },
+    {
+      ...baseEnv,
+      FEISHU_WEBHOOK_URL: "https://open.feishu.cn/open-apis/bot/v2/hook/test-token"
+    },
+    fetcher
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(calls.length, 1);
 });
 
 test("honors allowed source chat filter", async () => {
@@ -157,6 +290,18 @@ test("admin endpoints require bearer authorization", async () => {
 
   assert.equal(response.status, 401);
   assert.equal(body.error, "unauthorized");
+});
+
+test("sendFeishuText skips empty webhook url", async () => {
+  const result = await sendFeishuText("", "hello", async () => {
+    throw new Error("fetch should not be called");
+  });
+
+  assert.deepEqual(result, {
+    ok: true,
+    skipped: true,
+    reason: "missing_FEISHU_WEBHOOK_URL"
+  });
 });
 
 function jsonTelegramResponse(body, status = 200) {
