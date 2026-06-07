@@ -1,3 +1,12 @@
+---
+title: TeleBridge
+emoji: 📬
+colorFrom: blue
+colorTo: gray
+sdk: docker
+app_port: 7860
+---
+
 # TeleBridge
 
 TeleBridge 是一个 Docker 优先的 Telegram 消息桥接器。它使用个人账号的 MTProto 会话监听该账号可见的新消息，并把消息转发到指定用户、群组、超级群或频道。
