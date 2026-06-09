@@ -213,6 +213,7 @@ USERBOT_DAILY_REPORT_TIMEZONE_OFFSET=+08:00
 - 当日错误数量
 - 最近转发时间
 - 最近错误状态
+- 错误原因统计
 
 ## 当日转发汇总日报
 

@@ -94,7 +94,10 @@ export function formatKeepaliveMessage(state, config, now = new Date()) {
     `• 已转发：${state.metrics.forwarded}`,
     `• 错误数：${state.metrics.errors}`,
     `• 最近转发：${formatTimestamp(state.lastForwardedAt, timezoneOffset)}`,
-    `• 最近错误：${formatLastErrorForNotification(state.lastError)}`
+    `• 最近错误：${formatLastErrorForNotification(state.lastError)}`,
+    "",
+    "🛠️ 错误原因",
+    formatReasonMap(state.metrics.errorReasons, ERROR_REASON_LABELS)
   ].join("\n");
 }
 

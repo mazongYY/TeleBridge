@@ -55,6 +55,8 @@ test("formats keepalive and daily reports", () => {
   assert.match(keepalive, /📨 今日统计/);
   assert.match(keepalive, /• 已转发：1/);
   assert.match(keepalive, /• 最近错误：有错误，请查看运行日志/);
+  assert.match(keepalive, /🛠️ 错误原因/);
+  assert.match(keepalive, /• 飞书通知发送失败：1/);
 
   const report = formatDailyReport(state, config, new Date("2026-06-07T15:55:00.000Z"));
   assert.match(report, /📊 转发日报/);
