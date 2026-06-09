@@ -11,7 +11,7 @@
     "user:forward": "node scripts/user-forwarder.mjs"
   },
   "dependencies": {
-    "input": "^1.0.1",
-    "telegram": "^2.26.22"
+    "telegram": "^2.26.22",
+    "yaeti": "file:vendor/yaeti-compatible"
   }
 }
