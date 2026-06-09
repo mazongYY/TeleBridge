@@ -5,7 +5,6 @@ import { TelegramClient } from "telegram";
 import { NewMessage } from "telegram/events/index.js";
 import { StringSession } from "telegram/sessions/index.js";
 
-import { sendFeishuText } from "../src/index.js";
 import {
   loadUserbotConfig,
   normalizeId,
@@ -21,7 +20,8 @@ import {
   recordError,
   recordForwarded,
   recordSkipped,
-  resetDailyMetrics
+  resetDailyMetrics,
+  sendFeishuText
 } from "./userbot-runtime.mjs";
 
 let config;

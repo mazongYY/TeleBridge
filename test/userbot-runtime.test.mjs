@@ -11,7 +11,8 @@ import {
   recordError,
   recordForwarded,
   recordSkipped,
-  resetDailyMetrics
+  resetDailyMetrics,
+  sendFeishuText
 } from "../scripts/userbot-runtime.mjs";
 
 const config = {
@@ -99,4 +100,32 @@ test("resets daily metrics", () => {
   assert.equal(state.metrics.forwarded, 0);
   assert.equal(state.metrics.byType.channel, 0);
   assert.equal(state.metrics.windowStartedAt, "2026-06-08T00:00:00.000Z");
+});
+
+test("sendFeishuText skips empty webhook url", async () => {
+  const result = await sendFeishuText("", "hello", async () => {
+    throw new Error("fetch should not be called");
+  });
+
+  assert.deepEqual(result, {
+    ok: true,
+    skipped: true,
+    reason: "missing_FEISHU_WEBHOOK_URL"
+  });
+});
+
+test("sendFeishuText reports webhook API errors", async () => {
+  const result = await sendFeishuText("https://open.feishu.cn/open-apis/bot/v2/hook/test-token", "hello", async () => {
+    return new Response(JSON.stringify({ code: 19001, msg: "invalid webhook" }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json"
+      }
+    });
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "feishu_webhook_error");
+  assert.equal(result.status, 200);
+  assert.equal(result.description, "invalid webhook");
 });

@@ -5,19 +5,10 @@
   "type": "module",
   "description": "TeleBridge: Docker-first Telegram MTProto user message relay with Hugging Face Space support.",
   "scripts": {
-    "check": "node --check src/index.js && node --check scripts/userbot-config.mjs && node --check scripts/userbot-runtime.mjs && node --check scripts/login-user.mjs && node --check scripts/user-forwarder.mjs && node --test",
+    "check": "node --check scripts/userbot-config.mjs && node --check scripts/userbot-runtime.mjs && node --check scripts/login-user.mjs && node --check scripts/user-forwarder.mjs && node --test",
     "test": "node --test",
     "user:login": "node scripts/login-user.mjs",
-    "user:forward": "node scripts/user-forwarder.mjs",
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "set-secret:bot": "wrangler secret put TELEGRAM_BOT_TOKEN",
-    "set-secret:webhook": "wrangler secret put WEBHOOK_SECRET",
-    "set-secret:admin": "wrangler secret put ADMIN_TOKEN",
-    "set-secret:feishu": "wrangler secret put FEISHU_WEBHOOK_URL"
-  },
-  "devDependencies": {
-    "wrangler": "^4.0.0"
+    "user:forward": "node scripts/user-forwarder.mjs"
   },
   "dependencies": {
     "input": "^1.0.1",

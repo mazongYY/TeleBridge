@@ -11,8 +11,6 @@ app_port: 7860
 
 TeleBridge 是一个 Docker 优先的 Telegram 消息桥接器。它使用个人账号的 MTProto 会话监听该账号可见的新消息，并把消息转发到指定用户、群组、超级群或频道。
 
-项目同时保留 Cloudflare Worker Bot API 模式，但默认主线是 Docker / Hugging Face Spaces 上运行的个人账号转发器。
-
 ## 功能
 
 - 个人账号全量转发：私聊、群聊、超级群、频道、Telegram 官方服务通知
@@ -27,7 +25,7 @@ TeleBridge 是一个 Docker 优先的 Telegram 消息桥接器。它使用个人
 
 ## 运行模型
 
-TeleBridge 的个人账号转发需要长期保持 Telegram MTProto 连接，因此必须作为常驻 Node 进程运行。Cloudflare Workers 不适合承载这种长期连接，所以 Docker / Hugging Face Space 是推荐部署方式。
+TeleBridge 的个人账号转发需要长期保持 Telegram MTProto 连接，因此必须作为常驻 Node 进程运行。Docker / Hugging Face Space 是推荐部署方式。
 
 注意：代码可以避免应用自身因为配置错误退出，但不能绕过 Hugging Face 免费 Space 的平台休眠策略。需要持续在线时，应使用 Hugging Face 的付费硬件或其他常驻服务器。
 
@@ -57,7 +55,7 @@ TELEGRAM_TARGET
 FEISHU_WEBHOOK_URL
 ```
 
-`FEISHU_WEBHOOK_URL` 是飞书自定义机器人的 Webhook 地址。配置后，每次 Telegram 消息成功转发时，TeleBridge 会额外发送一条飞书文本通知；不配置则关闭飞书通知。Webhook 地址包含机器人凭据，建议在 Hugging Face Space Secrets、Docker 环境变量或 Cloudflare Worker Secret 中保存。
+`FEISHU_WEBHOOK_URL` 是飞书自定义机器人的 Webhook 地址。配置后，每次 Telegram 消息成功转发时，TeleBridge 会额外发送一条飞书文本通知；不配置则关闭飞书通知。Webhook 地址包含机器人凭据，建议在 Hugging Face Space Secrets 或 Docker 环境变量中保存。
 
 ## 生成 TELEGRAM_USER_SESSION
 
@@ -254,50 +252,9 @@ npm run check
 
 当前测试覆盖：
 
-- Worker webhook 转发逻辑
 - userbot 来源过滤
 - 监控类别过滤
+- 飞书通知发送结果处理
 - 保活消息格式
 - 日报格式与定时计算
 - 健康检查端口配置
-
-## Cloudflare Worker Bot 模式
-
-这部分仅适用于 Bot API webhook，不适用于个人账号全量转发。
-
-必填 Secrets：
-
-```text
-TELEGRAM_BOT_TOKEN
-WEBHOOK_SECRET
-ADMIN_TOKEN
-```
-
-可选 Secret：
-
-```text
-FEISHU_WEBHOOK_URL
-```
-
-必填变量：
-
-```text
-TARGET_CHAT_ID
-```
-
-部署：
-
-```bash
-npm run set-secret:bot
-npm run set-secret:webhook
-npm run set-secret:admin
-npm run set-secret:feishu # 可选，启用飞书通知时执行
-npm run deploy
-```
-
-设置 webhook：
-
-```bash
-curl -X POST "https://你的-worker域名/admin/set-webhook?drop_pending_updates=true" \
-  -H "Authorization: Bearer 你的ADMIN_TOKEN"
-```

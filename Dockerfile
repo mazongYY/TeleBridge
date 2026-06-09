@@ -14,8 +14,7 @@ USER node
 RUN npm ci --omit=dev
 
 COPY --chown=node:node scripts ./scripts
-COPY --chown=node:node src ./src
-COPY --chown=node:node README.md wrangler.jsonc ./
+COPY --chown=node:node README.md ./
 
 EXPOSE 7860
 

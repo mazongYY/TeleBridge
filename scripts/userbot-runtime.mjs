@@ -26,6 +26,10 @@ const ERROR_REASON_LABELS = {
   feishu_webhook_error: "飞书通知发送失败"
 };
 
+const JSON_HEADERS = {
+  "Content-Type": "application/json; charset=utf-8"
+};
+
 export function createRuntimeState(now = new Date()) {
   return {
     startedAt: now.toISOString(),
@@ -76,6 +80,47 @@ export function recordError(state, reason) {
 
 export function resetDailyMetrics(state, now = new Date()) {
   state.metrics = createDailyMetrics(now);
+}
+
+export async function sendFeishuText(webhookUrl, text, fetcher = fetch) {
+  const normalizedUrl = String(webhookUrl || "").trim();
+  if (!normalizedUrl) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "missing_FEISHU_WEBHOOK_URL"
+    };
+  }
+
+  const response = await fetcher(normalizedUrl, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({
+      msg_type: "text",
+      content: {
+        text
+      }
+    })
+  });
+
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    body = { msg: "Feishu returned a non-JSON response" };
+  }
+
+  const responseCode = body.code ?? body.StatusCode;
+  if (!response.ok || responseCode !== 0) {
+    return {
+      ok: false,
+      error: "feishu_webhook_error",
+      status: response.status,
+      description: body.msg || body.StatusMessage || response.statusText
+    };
+  }
+
+  return { ok: true };
 }
 
 export function formatKeepaliveMessage(state, config, now = new Date()) {
