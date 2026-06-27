@@ -151,14 +151,7 @@ async function handleNewMessage(client, event, targetEntity, targetPeerId, runti
   }
 
   try {
-    await client.forwardMessages(targetEntity, {
-      messages: [message.id],
-      fromPeer: sourcePeer,
-      silent: runtimeConfig.silent,
-      dropAuthor: runtimeConfig.dropAuthor,
-      noforwards: runtimeConfig.noForwards
-    });
-
+    await forwardWithFloodWait(client, targetEntity, sourcePeer, message.id, runtimeConfig);
     recordForwarded(state, chatType);
     console.log(`Forwarded message ${message.id} from ${normalizeId(sourcePeerId)} to ${targetPeerId}`);
     await sendFeishuForwardNotification(runtimeConfig, event, message, sourcePeerId, chatType);
@@ -183,6 +176,31 @@ async function isChatMuted(client, peer) {
     return settings.muteUntil > Math.floor(Date.now() / 1000);
   } catch {
     return false;
+  }
+}
+
+async function forwardWithFloodWait(client, targetEntity, sourcePeer, messageId, runtimeConfig, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await client.forwardMessages(targetEntity, {
+        messages: [messageId],
+        fromPeer: sourcePeer,
+        silent: runtimeConfig.silent,
+        dropAuthor: runtimeConfig.dropAuthor,
+        noforwards: runtimeConfig.noForwards
+      });
+      return;
+    } catch (error) {
+      if (error.errorMessage === "FLOOD" || error.className === "FloodWaitError" || error.seconds) {
+        const waitSeconds = error.seconds || 60;
+        if (attempt < retries) {
+          console.log(`FloodWait: waiting ${waitSeconds}s before retry (attempt ${attempt}/${retries})`);
+          await sleep((waitSeconds + 1) * 1000);
+          continue;
+        }
+      }
+      throw error;
+    }
   }
 }
 
