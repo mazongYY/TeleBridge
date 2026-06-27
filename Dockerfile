@@ -1,25 +1,35 @@
-FROM node:22-bookworm-slim
+FROM node:22-bookworm-slim AS builder
 
-ENV NODE_ENV=production
-ENV PORT=7860
 ENV NPM_CONFIG_AUDIT=false
 ENV NPM_CONFIG_FUND=false
 ENV NPM_CONFIG_INSTALL_LINKS=true
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
-WORKDIR /home/node/app
+WORKDIR /build
 
-RUN chown -R node:node /home/node/app
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
 
-COPY --chown=node:node package.json package-lock.json ./
-COPY --chown=node:node vendor ./vendor
-
-USER node
+COPY package.json package-lock.json ./
+COPY vendor ./vendor
 
 RUN npm ci --omit=dev
 
-COPY --chown=node:node scripts ./scripts
-COPY --chown=node:node README.md ./
+FROM node:22-bookworm-slim
+
+ENV NODE_ENV=production
+ENV PORT=7860
+
+WORKDIR /home/node/app
+
+COPY --from=builder /build/node_modules ./node_modules
+COPY package.json package-lock.json ./
+COPY vendor ./vendor
+COPY scripts ./scripts
+COPY README.md ./
+
+RUN chown -R node:node /home/node/app
+
+USER node
 
 EXPOSE 7860
 
