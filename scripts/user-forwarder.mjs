@@ -1,7 +1,7 @@
 import http from "node:http";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { TelegramClient } from "telegram";
+import { TelegramClient, Api } from "telegram";
 import { NewMessage } from "telegram/events/index.js";
 import { StringSession } from "telegram/sessions/index.js";
 
@@ -141,6 +141,15 @@ async function handleNewMessage(client, event, targetEntity, targetPeerId, runti
     return;
   }
 
+  if (runtimeConfig.skipMuted && chatType !== "official") {
+    const muted = await isChatMuted(client, sourcePeer);
+    if (muted) {
+      recordSkipped(state, "muted_chat");
+      logDebug(`Skipped message ${message.id}: muted_chat`);
+      return;
+    }
+  }
+
   try {
     await client.forwardMessages(targetEntity, {
       messages: [message.id],
@@ -157,6 +166,23 @@ async function handleNewMessage(client, event, targetEntity, targetPeerId, runti
     state.lastError = formatError(error);
     recordError(state, error?.errorMessage || error?.code || "forward_error");
     console.error(`Failed to forward message ${message.id} from ${normalizeId(sourcePeerId)}:`, state.lastError);
+  }
+}
+
+async function isChatMuted(client, peer) {
+  try {
+    const inputPeer = await client.getInputEntity(peer);
+    const settings = await client.invoke(
+      new Api.account.GetNotifySettings({
+        peer: new Api.InputNotifyPeer({ peer: inputPeer })
+      })
+    );
+    if (!settings.muteUntil) {
+      return false;
+    }
+    return settings.muteUntil > Math.floor(Date.now() / 1000);
+  } catch {
+    return false;
   }
 }
 
@@ -366,10 +392,11 @@ function loadFallbackConfig() {
     apiHash: "",
     session: "",
     target: "",
-    monitoredChatTypes: ["private", "group", "channel", "official"],
+    monitoredChatTypes: ["channel", "official"],
     allowedSourceChats: [],
     blockedSourceChats: [],
     skipTargetChat: true,
+    skipMuted: true,
     includeOutgoing: true,
     silent: false,
     dropAuthor: false,

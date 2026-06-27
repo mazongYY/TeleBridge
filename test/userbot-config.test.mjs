@@ -27,7 +27,7 @@ test("loads required userbot config from env", () => {
   assert.equal(config.session, "session");
   assert.equal(config.target, "-100777");
   assert.deepEqual(config.allowedSourceChats, ["1", "2"]);
-  assert.deepEqual(config.monitoredChatTypes, ["private", "group", "channel", "official"]);
+  assert.deepEqual(config.monitoredChatTypes, ["channel", "official"]);
   assert.equal(config.skipTargetChat, false);
   assert.equal(config.feishuWebhookUrl, "https://open.feishu.cn/open-apis/bot/v2/hook/test-token");
   assert.equal(config.healthHost, "0.0.0.0");

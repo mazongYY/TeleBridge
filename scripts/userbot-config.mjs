@@ -8,6 +8,7 @@ export function loadUserbotConfig(env = process.env) {
     blockedSourceChats: parseList(env.USERBOT_BLOCKED_SOURCE_CHATS),
     monitoredChatTypes: parseMonitoredChatTypes(env.USERBOT_MONITORED_CHAT_TYPES),
     skipTargetChat: parseBoolean(env.USERBOT_SKIP_TARGET_CHAT, true),
+    skipMuted: parseBoolean(env.USERBOT_SKIP_MUTED, true),
     includeOutgoing: parseBoolean(env.USERBOT_INCLUDE_OUTGOING, true),
     silent: parseBoolean(env.USERBOT_SILENT, false),
     dropAuthor: parseBoolean(env.USERBOT_DROP_AUTHOR, false),
@@ -120,7 +121,7 @@ export function parseList(value) {
 }
 
 export function parseMonitoredChatTypes(value) {
-  const types = parseList(value || "private,group,channel,official")
+  const types = parseList(value || "channel,official")
     .map((type) => type.toLowerCase())
     .map((type) => {
       if (type === "groups") return "group";
