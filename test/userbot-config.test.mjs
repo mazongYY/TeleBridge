@@ -5,6 +5,7 @@ import {
   loadUserbotConfig,
   parseList,
   parseMonitoredChatTypes,
+  parseRestrictedForwardMode,
   resolveMonitoredChatType,
   shouldForwardUserChatType,
   shouldForwardUserMessage,
@@ -32,6 +33,7 @@ test("loads required userbot config from env", () => {
   assert.equal(config.feishuWebhookUrl, "https://open.feishu.cn/open-apis/bot/v2/hook/test-token");
   assert.equal(config.healthHost, "0.0.0.0");
   assert.equal(config.healthPort, 7860);
+  assert.equal(config.restrictedForwardMode, "skip");
 });
 
 test("loads configured monitored chat types", () => {
@@ -50,6 +52,25 @@ test("rejects invalid monitored chat types", () => {
   assert.throws(
     () => parseMonitoredChatTypes("private,secret"),
     /USERBOT_MONITORED_CHAT_TYPES contains invalid values: secret/
+  );
+});
+
+test("loads restricted forward handling mode", () => {
+  const config = loadUserbotConfig({
+    TELEGRAM_API_ID: "12345",
+    TELEGRAM_API_HASH: "hash",
+    TELEGRAM_USER_SESSION: "session",
+    TELEGRAM_TARGET: "-100777",
+    USERBOT_RESTRICTED_FORWARD_MODE: "copy-text"
+  });
+
+  assert.equal(config.restrictedForwardMode, "copy_text");
+  assert.equal(parseRestrictedForwardMode("skip"), "skip");
+  assert.equal(parseRestrictedForwardMode("copy"), "copy_text");
+  assert.equal(parseRestrictedForwardMode("error"), "error");
+  assert.throws(
+    () => parseRestrictedForwardMode("invalid"),
+    /USERBOT_RESTRICTED_FORWARD_MODE must be one of: skip, copy_text, error/
   );
 });
 

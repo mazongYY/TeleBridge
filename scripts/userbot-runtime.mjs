@@ -12,6 +12,9 @@ const SKIP_REASON_LABELS = {
   source_chat_not_allowed: "来源不在白名单",
   blocked_source_chat: "来源在黑名单",
   outgoing_message_skipped: "跳过自己发出的消息",
+  muted_chat: "来源会话已静音",
+  restricted_forward_skipped: "受限来源禁止转发",
+  restricted_forward_media_skipped: "受限媒体无可复制文本",
   missing_message_id: "缺少消息 ID",
   missing_source_peer: "缺少来源会话",
   unknown_chat_type: "未知会话类型"
@@ -21,6 +24,8 @@ const ERROR_REASON_LABELS = {
   connection_error: "连接错误",
   forward_error: "转发失败",
   forward_queue_error: "转发队列错误",
+  CHAT_FORWARDS_RESTRICTED: "来源禁止转发",
+  restricted_forward_fallback_error: "受限消息复制失败",
   keepalive_send_error: "保活消息发送失败",
   daily_report_send_error: "日报发送失败",
   feishu_webhook_error: "飞书通知发送失败"

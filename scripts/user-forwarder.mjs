@@ -156,6 +156,32 @@ async function handleNewMessage(client, event, targetEntity, targetPeerId, runti
     console.log(`Forwarded message ${message.id} from ${normalizeId(sourcePeerId)} to ${targetPeerId}`);
     await sendFeishuForwardNotification(runtimeConfig, event, message, sourcePeerId, chatType);
   } catch (error) {
+    if (isRestrictedForwardError(error)) {
+      try {
+        const handled = await handleRestrictedForwardFailure(
+          client,
+          targetEntity,
+          event,
+          message,
+          sourcePeerId,
+          targetPeerId,
+          chatType,
+          runtimeConfig
+        );
+        if (handled) {
+          return;
+        }
+      } catch (fallbackError) {
+        state.lastError = formatError(fallbackError);
+        recordError(state, "restricted_forward_fallback_error");
+        console.error(
+          `Failed to handle restricted message ${message.id} from ${normalizeId(sourcePeerId)}:`,
+          state.lastError
+        );
+        return;
+      }
+    }
+
     state.lastError = formatError(error);
     recordError(state, error?.errorMessage || error?.code || "forward_error");
     console.error(`Failed to forward message ${message.id} from ${normalizeId(sourcePeerId)}:`, state.lastError);
@@ -179,6 +205,67 @@ async function isChatMuted(client, peer) {
   }
 }
 
+async function handleRestrictedForwardFailure(
+  client,
+  targetEntity,
+  event,
+  message,
+  sourcePeerId,
+  targetPeerId,
+  chatType,
+  runtimeConfig
+) {
+  const mode = runtimeConfig.restrictedForwardMode || "skip";
+
+  if (mode === "error") {
+    return false;
+  }
+
+  if (mode === "copy_text") {
+    const text = getUserbotMessageText(message);
+    if (!text) {
+      recordSkipped(state, "restricted_forward_media_skipped");
+      console.warn(
+        `Skipped protected media message ${message.id} from ${normalizeId(sourcePeerId)}: no text content to copy`
+      );
+      return true;
+    }
+
+    await sendMessageWithFloodWait(client, targetEntity, {
+      message: formatCopiedRestrictedMessage(event, message, sourcePeerId, chatType),
+      silent: runtimeConfig.silent,
+      noforwards: runtimeConfig.noForwards
+    });
+    recordForwarded(state, chatType);
+    console.log(`Copied protected text message ${message.id} from ${normalizeId(sourcePeerId)} to ${targetPeerId}`);
+    await sendFeishuForwardNotification(runtimeConfig, event, message, sourcePeerId, chatType);
+    return true;
+  }
+
+  recordSkipped(state, "restricted_forward_skipped");
+  console.warn(`Skipped protected message ${message.id} from ${normalizeId(sourcePeerId)}: forwards are restricted`);
+  return true;
+}
+
+async function sendMessageWithFloodWait(client, targetEntity, options, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await client.sendMessage(targetEntity, options);
+      return;
+    } catch (error) {
+      if (isFloodWaitError(error)) {
+        const waitSeconds = error.seconds || 60;
+        if (attempt < retries) {
+          console.log(`FloodWait: waiting ${waitSeconds}s before retry (attempt ${attempt}/${retries})`);
+          await sleep((waitSeconds + 1) * 1000);
+          continue;
+        }
+      }
+      throw error;
+    }
+  }
+}
+
 async function forwardWithFloodWait(client, targetEntity, sourcePeer, messageId, runtimeConfig, retries = 3) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -191,7 +278,7 @@ async function forwardWithFloodWait(client, targetEntity, sourcePeer, messageId,
       });
       return;
     } catch (error) {
-      if (error.errorMessage === "FLOOD" || error.className === "FloodWaitError" || error.seconds) {
+      if (isFloodWaitError(error)) {
         const waitSeconds = error.seconds || 60;
         if (attempt < retries) {
           console.log(`FloodWait: waiting ${waitSeconds}s before retry (attempt ${attempt}/${retries})`);
@@ -259,7 +346,7 @@ function formatUserbotChatLabel(chat) {
 }
 
 function getUserbotMessagePreview(message) {
-  const text = message.message || message.text;
+  const text = getUserbotMessageText(message);
   if (text) {
     return truncateText(text, 1800);
   }
@@ -272,7 +359,23 @@ function getUserbotMessagePreview(message) {
 }
 
 function formatUserbotPreviewTitle(message) {
-  return message.message || message.text ? "📝 消息内容" : "📎 消息摘要";
+  return getUserbotMessageText(message) ? "📝 消息内容" : "📎 消息摘要";
+}
+
+function formatCopiedRestrictedMessage(event, message, sourcePeerId, chatType) {
+  return [
+    "📬 受限来源消息",
+    `🧩 来源类型：${formatUserbotChatTypeLabel(chatType)}`,
+    `💬 来源会话：${formatUserbotChatLabel(event?.chat)}`,
+    `🆔 来源会话编号：${normalizeId(sourcePeerId)}`,
+    `🔢 消息编号：${message.id}`,
+    "",
+    truncateText(getUserbotMessageText(message), 3500)
+  ].join("\n");
+}
+
+function getUserbotMessageText(message) {
+  return String(message?.message || message?.text || "").trim();
 }
 
 function formatUserbotMediaLabel(className) {
@@ -419,6 +522,7 @@ function loadFallbackConfig() {
     silent: false,
     dropAuthor: false,
     noForwards: false,
+    restrictedForwardMode: "skip",
     keepaliveEnabled: false,
     keepaliveIntervalMinutes: 360,
     keepaliveMessage: "📡 转发器保活提醒",
@@ -431,6 +535,15 @@ function loadFallbackConfig() {
     healthPort: Number.parseInt(String(process.env.PORT || process.env.USERBOT_HEALTH_PORT || "7860"), 10) || 7860,
     logLevel: "info"
   };
+}
+
+function isRestrictedForwardError(error) {
+  const message = String(error?.errorMessage || error?.message || error || "");
+  return message.includes("CHAT_FORWARDS_RESTRICTED");
+}
+
+function isFloodWaitError(error) {
+  return error?.errorMessage === "FLOOD" || error?.className === "FloodWaitError" || Boolean(error?.seconds);
 }
 
 function logDebug(message) {

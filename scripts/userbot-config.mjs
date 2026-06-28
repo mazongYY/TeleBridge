@@ -7,6 +7,7 @@ export function loadUserbotConfig(env = process.env) {
     allowedSourceChats: parseList(env.USERBOT_ALLOWED_SOURCE_CHATS),
     blockedSourceChats: parseList(env.USERBOT_BLOCKED_SOURCE_CHATS),
     monitoredChatTypes: parseMonitoredChatTypes(env.USERBOT_MONITORED_CHAT_TYPES),
+    restrictedForwardMode: parseRestrictedForwardMode(env.USERBOT_RESTRICTED_FORWARD_MODE),
     skipTargetChat: parseBoolean(env.USERBOT_SKIP_TARGET_CHAT, true),
     skipMuted: parseBoolean(env.USERBOT_SKIP_MUTED, true),
     includeOutgoing: parseBoolean(env.USERBOT_INCLUDE_OUTGOING, true),
@@ -138,6 +139,21 @@ export function parseMonitoredChatTypes(value) {
   }
 
   return [...new Set(types)];
+}
+
+export function parseRestrictedForwardMode(value) {
+  const normalized = stringValue(value || "skip").toLowerCase().replace(/-/g, "_");
+  const aliases = {
+    copy: "copy_text"
+  };
+  const mode = aliases[normalized] || normalized;
+  const allowed = new Set(["skip", "copy_text", "error"]);
+
+  if (!allowed.has(mode)) {
+    throw new Error("USERBOT_RESTRICTED_FORWARD_MODE must be one of: skip, copy_text, error");
+  }
+
+  return mode;
 }
 
 export function normalizeId(value) {

@@ -62,6 +62,9 @@ FEISHU_WEBHOOK_URL=
 
 # 可选：按需调整过滤规则
 USERBOT_MONITORED_CHAT_TYPES=private,group,channel,official
+
+# 可选：禁止转发来源的处理方式：skip、copy_text、error
+USERBOT_RESTRICTED_FORWARD_MODE=skip
 ```
 
 > **安全提示**：`.env` 文件包含敏感信息，确保文件权限为 `600`：
@@ -217,6 +220,18 @@ docker logs telebridge-telebridge-1
 1. 确认 VPS 网络可以访问 Telegram
 2. 检查代理配置是否正确
 3. 查看 `healthz` 中的 `lastError` 字段
+
+### 日志反复出现 CHAT_FORWARDS_RESTRICTED
+
+这表示来源群组或频道开启了禁止转发。默认 `USERBOT_RESTRICTED_FORWARD_MODE=skip` 会跳过这类消息并记录为 skipped，不再作为普通转发错误刷屏。
+
+如果只需要同步文本内容，可在 `.env` 中设置：
+
+```ini
+USERBOT_RESTRICTED_FORWARD_MODE=copy_text
+```
+
+该模式只复制文本或 caption；纯图片、文件等无文本媒体会被跳过。修改后执行 `docker compose restart` 或在 1Panel 中重启编排。
 
 ### Session 过期
 
